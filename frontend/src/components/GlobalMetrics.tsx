@@ -14,6 +14,7 @@ export const GlobalMetrics: React.FC<GlobalMetricsProps> = ({ summary, warnings 
   const brokenGrains = summary.broken_count ?? 0;
   const wholeGrains = summary.whole_count ?? Math.max(0, totalGrains - brokenGrains);
   const undeterminedGrains = summary.undetermined_count ?? 0;
+  const foreignObjects = summary.foreign_matter_count ?? 0;
   const brokenPct = summary.broken_percent != null ? `${summary.broken_percent.toFixed(2)}%` : 'N/A';
   const wholePct = summary.whole_percent != null ? `${summary.whole_percent.toFixed(2)}%` : 'N/A';
 
@@ -90,6 +91,9 @@ export const GlobalMetrics: React.FC<GlobalMetricsProps> = ({ summary, warnings 
           <span className="text-xs text-text-secondary font-medium">
             3/4 Whole-Kernel Length Rule (0.75× Reference)
           </span>
+          <span className="text-[10px] text-amber-700 font-medium bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            Foreign objects excluded from grain counts
+          </span>
         </div>
         <div>{referenceSourceBadge()}</div>
       </div>
@@ -101,7 +105,7 @@ export const GlobalMetrics: React.FC<GlobalMetricsProps> = ({ summary, warnings 
       </div>
 
       {/* Primary Whole vs Broken Summary Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Total Count */}
         <div className="bg-surface border border-border rounded-xl p-3.5 shadow-sm">
           <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider block">Total Grains</span>
@@ -135,6 +139,18 @@ export const GlobalMetrics: React.FC<GlobalMetricsProps> = ({ summary, warnings 
           </div>
           <span className="text-[10px] text-rose-700 mt-1 block">
             {undeterminedGrains > 0 ? `${undeterminedGrains} undetermined` : 'Pieces & fragments'}
+          </span>
+        </div>
+
+        {/* Foreign Objects */}
+        <div className="bg-surface border border-amber-200 bg-amber-50/30 rounded-xl p-3.5 shadow-sm">
+          <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">Foreign Objects</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-amber-600">{foreignObjects}</span>
+            <span className="text-xs text-amber-700 font-medium">non-rice</span>
+          </div>
+          <span className="text-[10px] text-amber-700 mt-1 block">
+            {foreignObjects > 0 ? 'Detected in image' : 'No foreign matter'}
           </span>
         </div>
 
