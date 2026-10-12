@@ -18,14 +18,14 @@ Future phases will add defect classification, foreign matter detection, admixtur
 
 ## Project Structure
 
+Only files that are part of the shipped application are tracked in this
+repository. Editor/IDE and AI-assistant working files (e.g. `AGENTS.md`,
+`currenttask.md`, `.kilo/`) are kept locally only and are ignored by Git.
+
 ```
 A:\grain\
-├── .git/                      # Git repository metadata
-├── .kilo/                     # Kilo configuration
-├── .pytest_cache/             # Python test cache
-├── ai_work_log/               # AI progress and work logs
-├── assets/                    # Static assets (logo, etc.)
-├── backend/                   # FastAPI backend
+├── .pytest_cache/            # Python test cache (ignored)
+├── backend/                  # FastAPI backend
 │   ├── app/
 │   │   ├── api/
 │   │   │   └── routes.py     # API endpoints
@@ -39,18 +39,18 @@ A:\grain\
 │   ├── .env.example
 │   ├── package-lock.json
 │   └── requirements.txt
-├── configs/                   # Configuration files
+├── configs/                  # Configuration files
 │   ├── app.json
 │   ├── inference.json
 │   ├── models.json
 │   ├── parameters.json
 │   └── thresholds.json
-├── data/                      # Data and audit files
+├── data/                     # Data and audit files (ignored)
 │   ├── audit/
 │   ├── runs/
 │   └── datasets/
-├── docs/                      # Documentation
-├── frontend/                  # React + Vite frontend
+├── docs/                     # Documentation
+├── frontend/                 # React + Vite frontend
 │   ├── src/
 │   │   ├── components/       # UI components
 │   │   ├── App.tsx
@@ -60,43 +60,38 @@ A:\grain\
 │   ├── vite.config.ts
 │   ├── tailwind.config.js
 │   └── tsconfig.json
-├── grain_profiles/            # Grain reference profiles
-├── logs/                      # Application logs
-├── ml/                        # Machine learning modules
+├── grain_profiles/           # Grain reference profiles
+├── logs/                     # Application logs (ignored)
+├── ml/                       # Machine learning modules
 │   ├── config.py
-│   ├── quality/               # Quality classification modules
+│   ├── quality/              # Quality classification modules
 │   │   ├── geometry.py
 │   │   ├── calibration.py
 │   │   └── profiles.py
-│   ├── segmentation/          # Segmentation pipeline modules
+│   ├── segmentation/         # Segmentation pipeline modules
 │   │   ├── inference.py
 │   │   ├── pipeline.py
 │   │   ├── postprocessing.py
 │   │   ├── preprocessing.py
 │   │   ├── rice_gate.py
 │   │   └── segmentation.py
-│   └── standards/             # Standards comparison modules
-├── models/                    # Model artifacts and mappings
+│   └── standards/            # Standards comparison modules
+├── models/                   # Model artifacts and mappings (ignored binaries)
 │   ├── foreign_matter/
 │   └── segmentation/
-├── node_modules/              # Frontend dependencies
-├── package.json               # Root package.json (concurrently)
+├── node_modules/             # Frontend dependencies (ignored)
+├── package.json              # Root package.json (concurrently)
 ├── package-lock.json
-├── progress/                   # Progress and work logs
-├── render.yaml                # Render deployment config
-├── scripts/                   # Utility and audit scripts
-├── standards/                 # Standards data files
-├── test_images/               # Test and validation images
-├── tests/                     # Backend tests
-├── .env.example               # Environment variables template
+├── progress/                  # Progress and work logs (ignored)
+├── render.yaml               # Render deployment config
+├── scripts/                  # Utility and audit scripts
+├── standards/                # Standards data files
+├── test_images/              # Test and validation images
+├── tests/                    # Backend tests
+├── .env.example              # Environment variables template
 ├── .gitignore
-├── AGENTS.md
-├── DATASET_AUDIT_REPORT.md
 ├── PROJECT_CONTEXT.md
-├── README.md
-├── currenttask.md
-├── render.yaml
-└── tasks.txt
+└── README.md
 ```
 
 ## Quick Start
@@ -168,16 +163,20 @@ Frontend runs at: `http://localhost:5173`
 ### Production Pipeline Notes
 - The current production pipeline uses classical computer vision, not YOLO or deep learning models.
 - Previous YOLO experiments were intentionally removed and are not part of the production baseline.
-- Any future model experiments must be explicitly approved and isolated from production.
+- Any future model experiments (e.g. YOLOv8, Qwen) must be explicitly approved and isolated from production.
+
+### Foreign Matter
+- Foreign matter is detected as a heuristic (color/contour) fallback within the rice/non-rice gate.
+- It is reported separately and never treated as rice, but the detector is untrained — treat as experimental.
+- Trained foreign-matter detection is not implemented.
 
 ### Calibration
 - Physical millimetre measurements require calibration (e.g., ArUco-based calibration).
 - Without calibration, measurements are reported in pixels.
 - A pixel reference is not universal across different camera distances.
 
-### Not Yet Implemented
-- Defect classification (broken, damaged, discolored, chalky, red, dehusked, immature, sprouted/weevilled)
-- Foreign matter detection
+### Not Yet Implemented (validated)
+- Defect classification (damaged, discolored, chalky, red, dehusked, immature, sprouted/weevilled)
 - Admixture analysis
 - Official standards screening and grading
 

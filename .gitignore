@@ -64,3 +64,8 @@ logs/
 Thumbs.db
 
 .kilo
+kilo.json
+AGENTS.md
+currenttask.md
+
+docs
