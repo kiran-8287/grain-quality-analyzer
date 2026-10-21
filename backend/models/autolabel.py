@@ -2,7 +2,7 @@
 import cv2, numpy as np
 from sklearn.cluster import KMeans
 
-def label_image(path, min_area=400):
+def label_image(path, min_area=400, instance_callback=None):
     im = cv2.imread(str(path))
     hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
     h, s, v = [x.astype(np.int32) for x in cv2.split(hsv)]
@@ -22,30 +22,36 @@ def label_image(path, min_area=400):
 
     inst = []
     # foreign matter: one instance per connected stone blob
-    n, cc = cv2.connectedComponents(stone)
+    n, cc, stats, _ = cv2.connectedComponentsWithStats(stone)
     for i in range(1, n):
-        m = cc == i
-        if m.sum() >= min_area: inst.append((m, 'foreign'))
+        if stats[i, cv2.CC_STAT_AREA] >= min_area:
+            m = cc == i
+            if instance_callback: instance_callback(m, 'foreign')
+            else: inst.append((m, 'foreign'))
 
     # rice: connected components, then split clumps by area / single-grain area
-    n, cc = cv2.connectedComponents(rice)
-    comps = [(cc == i) for i in range(1, n) if (cc == i).sum() >= min_area]
-    areas = sorted(m.sum() for m in comps)
+    n, cc, stats, _ = cv2.connectedComponentsWithStats(rice)
+    comps = [(i, int(stats[i, cv2.CC_STAT_AREA])) for i in range(1, n)]
+    comps = [(i, area) for i, area in comps if area >= min_area]
+    areas = sorted(area for _, area in comps)
     ref = float(np.median(areas[:max(1, int(len(areas) * 0.6))]))
-    for m in comps:
-        a = m.sum()
+    for component, a in comps:
+        m = cc == component
         cnts, _ = cv2.findContours(m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         c = max(cnts, key=cv2.contourArea)
         solidity = cv2.contourArea(c) / max(cv2.contourArea(cv2.convexHull(c)), 1)
         k = max(1, int(round(a / ref)))
         if solidity > 0.93 and a < 1.9 * ref: k = 1       # clean convex blob = one grain
         if k == 1:
-            inst.append((m, 'rice')); continue
+            if instance_callback: instance_callback(m, 'rice')
+            else: inst.append((m, 'rice'))
+            continue
         ys, xs = np.where(m)
         lab = KMeans(n_clusters=k, n_init=5, random_state=0).fit_predict(np.c_[xs, ys].astype(np.float32))
         for j in range(k):
             mm = np.zeros(m.shape, bool); mm[ys[lab == j], xs[lab == j]] = True
-            inst.append((mm, 'rice'))
+            if instance_callback: instance_callback(mm, 'rice')
+            else: inst.append((mm, 'rice'))
     return im, inst, ref
 
 def draw(im, inst, text):

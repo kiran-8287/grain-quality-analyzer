@@ -1,9 +1,11 @@
 import argparse
 import csv
+import gc
 import json
 import random
 import shutil
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import cv2
@@ -55,14 +57,20 @@ def make_groups(paths):
 
 
 def polygons(mask):
-    m = (np.asarray(mask).astype(np.uint8) > 0).astype(np.uint8) * 255
-    contours, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    m = np.asarray(mask, dtype=bool)
+    ys, xs = np.nonzero(m)
+    if not len(xs):
+        return []
+    x0, y0, x1, y1 = xs.min(), ys.min(), xs.max(), ys.max()
+    roi = (m[y0:y1 + 1, x0:x1 + 1].astype(np.uint8) * 255)
+    contours, _ = cv2.findContours(roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     out = []
     for c in contours:
         if cv2.contourArea(c) < 400:
             continue
         p = cv2.approxPolyDP(c, 1.0, True).reshape(-1, 2)
         if len(p) >= 3:
+            p += (x0, y0)
             out.append(p)
     return out
 
@@ -70,22 +78,27 @@ def polygons(mask):
 def auto_labels(path, cache):
     key = str(path.resolve())
     if key not in cache:
-        img, instances, ref_area = label_image(path)
-        anns = []
-        for mask, label in instances:
-            if label not in NAMES:
-                continue
-            anns.extend((p, label) for p in polygons(mask))
-        cache[key] = (img, anns, ref_area)
+        anns, counts = [], {"rice": 0, "foreign": 0}
+        def consume(mask, label):
+            if label in NAMES:
+                counts[label] += 1
+                anns.extend((p, label) for p in polygons(mask))
+        img, _, ref_area = label_image(path, instance_callback=consume)
+        height, width = img.shape[:2]
+        del img
+        cache[key] = (width, height, anns, ref_area, counts)
     return cache[key]
+
+
+def label_record(path):
+    return auto_labels(Path(path), {})
 
 
 def coco_package(paths, cache, out):
     out.mkdir(parents=True, exist_ok=True)
     images, annotations, aid = [], [], 1
     for iid, path in enumerate(paths, 1):
-        img, anns, _ = auto_labels(path, cache)
-        h, w = img.shape[:2]
+        w, h, anns, _, _ = auto_labels(path, cache)
         shutil.copy2(path, out / path.name)
         images.append({"id": iid, "file_name": path.name, "width": w, "height": h})
         for poly, label in anns:
@@ -175,6 +188,10 @@ def main():
     if not raw:
         raise SystemExit(f"No photos found in {ROOT / 'data' / 'raw'}")
     gids = make_groups(raw)
+    work = ROOT / "data" / "work"
+    work.mkdir(parents=True, exist_ok=True)
+    with (work / "groups.csv").open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f); writer.writerow(["photo", "group"]); writer.writerows((p.name, g) for p, g in zip(raw, gids))
     unique = sorted(set(gids))
     if len(unique) > 1:
         _, vi = next(GroupShuffleSplit(n_splits=1, test_size=0.15, random_state=0).split(unique, groups=unique))
@@ -182,19 +199,20 @@ def main():
     else:
         val_groups = set()
     report, cache, classical_counts = [], {}, {}
-    for p in raw:
-        _, anns, _ = auto_labels(p, cache)
-        nr = sum(label == "rice" for _, label in anns)
-        nf = sum(label == "foreign" for _, label in anns)
-        classical_counts[p.name] = (nr, nf)
-        report.append((p.name, gids[raw.index(p)], nr, nf,
-                       nf != args.expected_foreign or abs(nr - args.expected_rice) > args.tol))
-    work = ROOT / "data" / "work"
-    work.mkdir(parents=True, exist_ok=True)
+    with ProcessPoolExecutor(max_workers=2) as pool:
+        for i, (p, record) in enumerate(zip(raw, pool.map(label_record, raw, chunksize=1))):
+            if i % 10 == 0:
+                print(f"Auto-labeling {i + 1}/{len(raw)}: {p.name}", flush=True)
+            cache[str(p.resolve())] = record
+            counts = record[4]
+            nr, nf = counts["rice"], counts["foreign"]
+            classical_counts[p.name] = (nr, nf)
+            report.append((p.name, gids[i], nr, nf,
+                           nf != args.expected_foreign or abs(nr - args.expected_rice) > args.tol))
+            if i % 10 == 9:
+                gc.collect()
     with (work / "report.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f); writer.writerow(["photo", "group", "n_rice", "n_foreign", "needs_review"]); writer.writerows(report)
-    with (work / "groups.csv").open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f); writer.writerow(["photo", "group"]); writer.writerows((p.name, g) for p, g in zip(raw, gids))
     print(f"n photos={len(raw)} n groups={len(unique)} n flagged={sum(r[-1] for r in report)}")
     if args.source == "classical":
         if (work / "review").exists(): shutil.rmtree(work / "review")
@@ -221,7 +239,7 @@ def main():
             write_yolo(raw_by_name[name], reviewed_polygons(record, w, h), split)
         for p, g in zip(raw, gids):
             if g not in val_groups and p.name not in reviewed:
-                write_yolo(p, auto_labels(p, cache)[1], "train")
+                write_yolo(p, auto_labels(p, cache)[2], "train")
         for split in ("train", "val"):
             (base / f"{split}.txt").write_text("\n".join(str(p.resolve()) for p in (base / "images" / split).glob("*")), encoding="utf-8")
         (base / "data.yaml").write_text(yaml.safe_dump({"path": str(base.resolve()), "train": "train.txt", "val": "val.txt",
@@ -233,7 +251,7 @@ def main():
         tiles = []
         for p in sample:
             img = cv2.imread(str(p))
-            for poly, label in auto_labels(p, cache)[1]:
+            for poly, label in auto_labels(p, cache)[2]:
                 cv2.polylines(img, [np.asarray(poly, np.int32)], True, (0, 220, 0) if label == "rice" else (0, 0, 255), 2)
             thumb = cv2.resize(img, (640, 640 * img.shape[0] // img.shape[1]))
             cv2.putText(thumb, p.name[:60], (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 0, 0), 1)
