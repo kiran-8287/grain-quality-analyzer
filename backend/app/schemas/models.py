@@ -2,7 +2,7 @@
 Pydantic Schemas for Rice Quality Analysis API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -108,3 +108,38 @@ class AnalysisResultResponse(BaseModel):
     annotated_image_base64: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
     processing_time_seconds: Optional[float] = None
+
+
+class ExperimentalGrainInstance(BaseModel):
+    id: int
+    class_name: str = Field(alias="class")
+    score: float
+    length_px: float
+    breadth_px: float
+    lb_ratio: Optional[float] = None
+    length_mm: Optional[float] = None
+    breadth_mm: Optional[float] = None
+    bbox: List[int]
+    area_px: float
+    orientation_deg: float
+    measurable: bool
+    flags: List[str] = Field(default_factory=list)
+
+
+class ExperimentalForeignDetection(BaseModel):
+    class_name: str = Field(alias="class")
+    score: float
+    bbox: List[float]
+
+
+class ExperimentalGrainAnalysisResponse(BaseModel):
+    experimental: Literal[True] = True
+    image_size: Dict[str, int]
+    counts: Dict[str, int]
+    percentages: Dict[str, Optional[float]]
+    grains: List[ExperimentalGrainInstance] = Field(default_factory=list)
+    foreign_matter: List[ExperimentalForeignDetection] = Field(default_factory=list)
+    aggregates: Dict[str, Any]
+    model_versions: Dict[str, Any]
+    device: str
+    timings_ms: Dict[str, float]

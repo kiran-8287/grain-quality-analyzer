@@ -26,6 +26,7 @@ from ml.config import (
     get_model_info,
     get_threshold,
 )
+from ml.segmentation.mask_ops import translate_points
 from ml.segmentation.postprocessing import PostProcessor
 from ml.segmentation.segmentation import segment_grains, SegmentationResult, GrainInstance
 
@@ -249,17 +250,15 @@ def _run_classical_inference(img_bgr: np.ndarray) -> List[Dict]:
         mask = grain.mask
         if mask is None:
             continue
-        if mask.shape[:2] != (h, w):
-            resized = np.zeros((h, w), dtype=np.uint8)
-            mh, mw = mask.shape[:2]
-            resized[: min(mh, h), : min(mw, w)] = mask[: min(mh, h), : min(mw, w)]
-            mask = resized
+        # The mask is a tight crop of the image; the offset says where it sits.
+        offset = tuple(int(v) for v in (getattr(grain, "mask_offset", (0, 0)) or (0, 0)))
 
         x, y, bw, bh = grain.bbox
         detections.append(
             {
                 "bbox": [int(x), int(y), int(bw), int(bh)],
                 "mask": mask.astype(np.uint8),
+                "mask_offset": offset,
                 "confidence": float(grain.confidence),
                 "category_id": 1,
                 "category_name": "rice_grain",
@@ -471,6 +470,7 @@ def analyze_image(image: np.ndarray) -> Dict[str, Any]:
         )
 
         mask = det.get("mask")
+        mask_offset = det.get("mask_offset") or (0, 0)
         area_pixels = int(np.sum(mask > 0)) if isinstance(mask, np.ndarray) else 0
 
         num_components = 1
@@ -547,10 +547,14 @@ def analyze_image(image: np.ndarray) -> Dict[str, Any]:
         if isinstance(mask, np.ndarray) and area_pixels > 0:
             ys, xs = np.where(mask > 0)
             if len(xs) > 0:
-                cx = float(np.mean(xs))
-                cy = float(np.mean(ys))
+                cx = float(np.mean(xs)) + float(mask_offset[0])
+                cy = float(np.mean(ys)) + float(mask_offset[1])
 
-        polygon = _mask_to_polygon(mask) if isinstance(mask, np.ndarray) else []
+        polygon = (
+            translate_points(_mask_to_polygon(mask), mask_offset)
+            if isinstance(mask, np.ndarray)
+            else []
+        )
 
         grain_entry = {
             "id": int(det.get("id", len(grains_out) + 1)),

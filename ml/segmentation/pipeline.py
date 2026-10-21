@@ -62,6 +62,11 @@ from ml.quality.geometry import (
 )
 from ml.quality.profiles import GrainProfile, get_default_grain_profile, load_grain_profile
 from ml.segmentation.inference import analyze_image as phase1_analyze_image
+from ml.segmentation.mask_ops import (
+    draw_mask,
+    tight_bounds,
+    translate_contour,
+)
 from ml.segmentation.postprocessing import (
     PostProcessor,
     confidence_to_color,
@@ -155,37 +160,71 @@ class RiceQualityPipeline:
         }.get(label or "", "segmented")
 
     @staticmethod
+    def _grain_image_crop(
+        image_rgb: np.ndarray, grain: GrainInstance
+    ) -> np.ndarray:
+        """
+        Return the image region covered by a grain.
+
+        Grain masks are stored as a tight crop plus an image-space offset, so
+        the matching image region is a cheap view instead of a full-frame
+        copy.  Per-grain classifiers crop by the mask's own bounding box, so
+        handing them this view yields exactly the same pixels as before.
+        """
+        ox, oy = grain.mask_offset
+        mh, mw = grain.mask.shape[:2]
+        return image_rgb[oy : oy + mh, ox : ox + mw]
+
+    @staticmethod
     def _rasterize_polygon(
         h: int,
         w: int,
         polygon: Any,
         bbox: Tuple[int, int, int, int],
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    ) -> Tuple[Optional[np.ndarray], Tuple[int, int], Optional[np.ndarray]]:
         """
-        Return (uint8_mask_HxW, contour_Nx1x2_int32) from either a polygon
-        list of [x,y] points OR a fallback bbox rectangle.
+        Return (uint8_mask_crop, offset_xy, contour_Nx1x2_int32) from either a
+        polygon list of [x,y] points OR a fallback bbox rectangle.
+
+        The mask is rasterised into a crop-sized canvas instead of a
+        full-frame one: a full-frame canvas per grain costs image_pixels bytes
+        and a 12 MP upload with 1000 grains would need 12.6 GB.  ``offset_xy``
+        is the position of the crop in image coordinates; the contour is
+        returned in image coordinates.
         """
         bx, by, bw, bh = bbox
         mask_filled = None
+        offset = (0, 0)
         if isinstance(polygon, (list, tuple)) and len(polygon) >= 3:
             try:
                 pts = np.array(
                     [[int(float(px)), int(float(py))] for [px, py] in polygon],
                     dtype=np.int32,
                 ).reshape(-1, 1, 2)
-                canvas = np.zeros((h, w), dtype=np.uint8)
-                cv2.fillPoly(canvas, [pts], 255)
-                mask_filled = canvas
+                # Crop the canvas to the polygon extent (clipped to the image)
+                # and shift the polygon to the crop origin.
+                x0 = max(0, int(pts[..., 0].min()))
+                y0 = max(0, int(pts[..., 1].min()))
+                x1 = min(w, int(pts[..., 0].max()) + 1)
+                y1 = min(h, int(pts[..., 1].max()) + 1)
+                if x1 > x0 and y1 > y0:
+                    canvas = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
+                    shifted = pts - np.array([x0, y0], dtype=np.int32)
+                    cv2.fillPoly(canvas, [shifted], 255)
+                    mask_filled = canvas
+                    offset = (x0, y0)
             except Exception:
                 mask_filled = None
 
         if mask_filled is None and bw > 0 and bh > 0:
-            mask_filled = np.zeros((h, w), dtype=np.uint8)
             x1 = max(0, bx)
             y1 = max(0, by)
             x2 = min(w, bx + bw)
             y2 = min(h, by + bh)
-            mask_filled[y1:y2, x1:x2] = 255
+            if x2 > x1 and y2 > y1:
+                mask_filled = np.zeros((y2 - y1, x2 - x1), dtype=np.uint8)
+                mask_filled[:, :] = 255
+                offset = (x1, y1)
 
         contour = None
         if mask_filled is not None:
@@ -196,10 +235,11 @@ class RiceQualityPipeline:
                 if cnts:
                     # Largest contour only (polygon fill should give exactly one).
                     contour = max(cnts, key=cv2.contourArea)
+                    contour = translate_contour(contour, offset)
             except Exception:
                 contour = None
 
-        return mask_filled, contour
+        return mask_filled, offset, contour
 
     def _phase1_to_dashboard_grains(
         self,
@@ -250,7 +290,7 @@ class RiceQualityPipeline:
                 cx = float(bx + bw / 2.0)
                 cy = float(by + bh / 2.0)
 
-            mask, contour = self._rasterize_polygon(
+            mask, mask_offset, contour = self._rasterize_polygon(
                 h=h,
                 w=w,
                 polygon=g.get("mask_polygon"),
@@ -258,13 +298,18 @@ class RiceQualityPipeline:
             )
             if mask is None:
                 continue
+            # Keep the mask as a tight crop; the offset locates it in the image.
+            bounds = tight_bounds(mask)
+            if bounds is None:
+                continue
+            mx0, my0, mw, mh = bounds
+            mask = mask[my0 : my0 + mh, mx0 : mx0 + mw]
+            mask_offset = (mask_offset[0] + mx0, mask_offset[1] + my0)
             area = int(np.sum(mask > 0))
-            mask_y, mask_x = np.where(mask > 0)
-            if mask_x.size:
-                bx = int(mask_x.min())
-                by = int(mask_y.min())
-                bw = int(mask_x.max() - bx + 1)
-                bh = int(mask_y.max() - by + 1)
+            bx = mask_offset[0]
+            by = mask_offset[1]
+            bw = mw
+            bh = mh
             if area <= 0 and bw * bh > 0:
                 area = bw * bh
 
@@ -274,6 +319,7 @@ class RiceQualityPipeline:
                 bbox=(bx, by, bw, bh),
                 confidence=confidence,
                 centroid=(cx, cy),
+                mask_offset=mask_offset,
                 contour=contour,
                 is_touching=bool(g.get("is_touching", False)),
                 is_overlapping=False,
@@ -613,6 +659,7 @@ class RiceQualityPipeline:
                 grain_id=grain.grain_id,
                 mask=grain.mask,
                 pixels_per_mm=pixels_per_mm,
+                offset=grain.mask_offset,
             )
             geometries.append(geom)
             grain_areas.append(geom.area_pixels)
@@ -681,7 +728,9 @@ class RiceQualityPipeline:
         # Build LAB reference for discolouration
         all_labs = []
         for grain in grains:
-            g_lab = extract_grain_lab_pixels(image_rgb, grain.mask)
+            g_lab = extract_grain_lab_pixels(
+                self._grain_image_crop(image_rgb, grain), grain.mask
+            )
             if g_lab is not None and len(g_lab) > 0:
                 all_labs.append(g_lab)
             ref_lab = compute_reference_lab(all_labs)
@@ -718,6 +767,8 @@ class RiceQualityPipeline:
         # For dense large samples, use a bounded fast path so the pipeline remains responsive
         # while preserving truthful heuristic fallbacks and clear method labels.
         grain_masks_list = [g.mask for g in grains]
+        grain_crops = [self._grain_image_crop(image_rgb, g) for g in grains]
+        grain_offsets = [g.mask_offset for g in grains]
         bulk_mode = len(grain_masks_list) >= 30
         if bulk_mode:
             warnings.append(
@@ -747,10 +798,15 @@ class RiceQualityPipeline:
                 for _ in grain_masks_list
             ]
         else:
-            damaged_results = batch_classify_damaged(image_rgb, grain_masks_list)
-            sprouted_results = batch_classify_sprouted_weevilled(image_rgb, grain_masks_list)
+            damaged_results = batch_classify_damaged(
+                image_rgb, grain_masks_list, grain_crops=grain_crops
+            )
+            sprouted_results = batch_classify_sprouted_weevilled(
+                image_rgb, grain_masks_list, grain_crops=grain_crops
+            )
 
         for i, (grain, geom) in enumerate(zip(grains, geometries)):
+            grain_crop = grain_crops[i]
             # Broken
             g_len = (
                 geom.effective_length_mm
@@ -771,7 +827,7 @@ class RiceQualityPipeline:
                 broken_count += 1
 
             # Chalky
-            chalky_feats = extract_chalky_features(image_rgb, grain.mask)
+            chalky_feats = extract_chalky_features(grain_crop, grain.mask)
             chalky_res = heuristic_chalky_classification(chalky_feats)
             if chalky_res["chalky_label"] == "chalky":
                 chalky_count += 1
@@ -785,18 +841,18 @@ class RiceQualityPipeline:
 
             # Discoloured
             discoloured_res = analyze_discoloured(
-                image_rgb, grain.mask, reference_lab=ref_lab
+                grain_crop, grain.mask, reference_lab=ref_lab
             )
             if discoloured_res.get("discoloured_label") == "discoloured":
                 discoloured_count += 1
 
             # Red
-            red_res = analyze_red(image_rgb, grain.mask)
+            red_res = analyze_red(grain_crop, grain.mask)
             if red_res.get("red_label") == "red":
                 red_count += 1
 
             # Dehusked
-            dehusked_res = analyze_dehusked(image_rgb, grain.mask)
+            dehusked_res = analyze_dehusked(grain_crop, grain.mask)
             if dehusked_res.get("dehusked_label") == "dehusked":
                 dehusked_count += 1
 
@@ -862,7 +918,11 @@ class RiceQualityPipeline:
         #    include them as extra inputs (tagged provenance='phase1_segmentation')
         #    and the merger de-duplicates by box-IoU against the gate FM list.
         grain_masks_list = [g.mask for g in grains]
-        base_fm = detect_foreign_matter(image_rgb, grain_masks=grain_masks_list)
+        base_fm = detect_foreign_matter(
+            image_rgb,
+            grain_masks=grain_masks_list,
+            grain_mask_offsets=grain_offsets,
+        )
         extra_fm_dicts: List[Dict[str, Any]] = []
         for f in phase1_fm_extra:
             # Convert adapter tuple/dict to a ForeignObject-shaped object the
@@ -1070,9 +1130,8 @@ class RiceQualityPipeline:
 
         # 11. Image Quality Assessment
         grain_quality_mask = np.zeros((h, w), dtype=np.uint8)
-        for grain_mask in grain_masks_list:
-            if grain_mask.shape == grain_quality_mask.shape:
-                grain_quality_mask = cv2.bitwise_or(grain_quality_mask, grain_mask)
+        for grain_mask, offset in zip(grain_masks_list, grain_offsets):
+            draw_mask(grain_quality_mask, grain_mask, offset)
 
         quality_res = assess_image_quality(
             image_rgb=image_rgb,
@@ -1401,11 +1460,15 @@ class RiceQualityPipeline:
         # Draw grain masks and IDs
         for i, (grain, geom) in enumerate(zip(grains, geometries)):
             color = colors[i % len(colors)]
+            # The mask is a crop; blend it into the matching image region.
+            ox, oy = grain.mask_offset
+            mh, mw = grain.mask.shape[:2]
+            region = overlay[oy : oy + mh, ox : ox + mw]
             mask_bool = grain.mask > 0
 
             # Blend color mask
-            overlay[mask_bool] = (
-                overlay[mask_bool] * 0.6 + np.array(color) * 0.4
+            region[mask_bool] = (
+                region[mask_bool] * 0.6 + np.array(color) * 0.4
             ).astype(np.uint8)
 
             # Draw contour if present

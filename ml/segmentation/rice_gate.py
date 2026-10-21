@@ -266,14 +266,23 @@ def _object_features(
     object_mask: np.ndarray,
     contour: np.ndarray,
     background_gray: float,
+    offset: Tuple[int, int] = (0, 0),
 ) -> Dict[str, Any]:
-    """Colour / shape / surface-texture features for one detected object."""
+    """
+    Colour / shape / surface-texture features for one detected object.
+
+    ``object_mask`` and ``contour`` are expressed in the object's own
+    bounding-box frame; ``offset`` is that frame's position in the image.
+    Working on the crop keeps the per-object cost independent of the image
+    resolution (a full-frame mask per object is 12.6 MB on a 12 MP upload).
+    """
     mask_bool = object_mask > 0
     if int(np.count_nonzero(mask_bool)) == 0:
         return {}
 
     x, y, w, h = cv2.boundingRect(contour)
-    crop = image_rgb[y:y + h, x:x + w]
+    off_x, off_y = int(offset[0]), int(offset[1])
+    crop = image_rgb[off_y + y : off_y + y + h, off_x + x : off_x + x + w]
     crop_mask = mask_bool[y:y + h, x:x + w]
     if crop.size == 0 or int(np.count_nonzero(crop_mask)) == 0:
         return {}
@@ -313,7 +322,7 @@ def _object_features(
 
     return {
         "area_pixels": int(np.count_nonzero(mask_bool)),
-        "bbox": [int(x), int(y), int(w), int(h)],
+        "bbox": [int(off_x + x), int(off_y + y), int(w), int(h)],
         "mean_rgb": [round(float(v), 2) for v in mean_rgb],
         "mean_gray": round(mean_gray, 2),
         "mean_l_star": round(mean_l_255 * 100.0 / 255.0, 2),
@@ -616,10 +625,17 @@ def detect_rice_detections(image_rgb: np.ndarray) -> List[Dict[str, Any]]:
         if cv2.contourArea(contour) < min_area:
             continue
 
-        object_mask = np.zeros(binary.shape, dtype=np.uint8)
-        cv2.drawContours(object_mask, [contour], -1, 255, -1)
+        # Build the object mask inside its own bounding box: a full-frame mask
+        # per object costs image_pixels bytes, which is 12.6 MB per object on
+        # a 12 MP upload.
+        bx, by, bw, bh = cv2.boundingRect(contour)
+        object_mask = np.zeros((bh, bw), dtype=np.uint8)
+        local_contour = contour - np.array([bx, by], dtype=contour.dtype)
+        cv2.drawContours(object_mask, [local_contour], -1, 255, -1)
 
-        features = _object_features(image_rgb, object_mask, contour, background_gray)
+        features = _object_features(
+            image_rgb, object_mask, local_contour, background_gray, offset=(bx, by)
+        )
         if not features:
             continue
 

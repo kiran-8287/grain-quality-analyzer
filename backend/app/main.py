@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -14,9 +15,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from backend.app.api.routes import router
 from backend.app.services.run_logger import structured_logger
@@ -53,11 +59,76 @@ if not getattr(structured_logger.logger, structured_logger_handler_key, False):
 
 logger = logging.getLogger("rice_quality_ai")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load experimental models lazily; keep the web app available without them."""
+    app.state.grain_ml_runtime = None
+    app.state.grain_ml_config = None
+    app.state.grain_ml_error = "Experimental grain models are not configured or available."
+    try:
+        # This module defers Torch/torchvision/Ultralytics imports until runtime construction.
+        from backend.models.grain_infer import GrainInferenceConfig, GrainInferenceRuntime
+
+        config = GrainInferenceConfig.from_env(PROJECT_ROOT)
+        app.state.grain_ml_config = config
+        app.state.grain_ml_runtime = await run_in_threadpool(GrainInferenceRuntime, config)
+        app.state.grain_ml_error = None
+        structured_logger.info(
+            "grain_ml_models_loaded",
+            device=str(app.state.grain_ml_runtime.device),
+            mask_checkpoint=config.mask_checkpoint.name,
+            yolo_checkpoint=config.yolo_weights.name,
+            experimental=True,
+        )
+    except ImportError as exc:
+        app.state.grain_ml_error = f"Experimental ML dependencies are unavailable: {exc}"
+        structured_logger.warning("grain_ml_startup_unavailable", reason=app.state.grain_ml_error)
+    except FileNotFoundError as exc:
+        app.state.grain_ml_error = str(exc)
+        structured_logger.warning("grain_ml_startup_unavailable", reason=app.state.grain_ml_error)
+    except Exception as exc:
+        app.state.grain_ml_error = f"Experimental model loading failed: {type(exc).__name__}: {exc}"
+        logger.exception("Experimental grain models could not be loaded")
+        structured_logger.error("grain_ml_startup_unavailable", reason=app.state.grain_ml_error)
+    yield
+
+
 app = FastAPI(
     title="GRAIN QUALITY ANALYZER API",
     description="Automated Image-Based Raw Milled Rice Grain Quality Analysis System",
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+
+def _is_grain_ml_path(path: str) -> bool:
+    return path.rstrip("/") in {"/analyze-ml", "/api/analyze-ml"}
+
+
+@app.exception_handler(HTTPException)
+async def experimental_http_exception_handler(request: Request, exc: HTTPException):
+    if _is_grain_ml_path(request.url.path):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"experimental": True, "detail": exc.detail},
+            headers=exc.headers,
+        )
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def experimental_validation_exception_handler(request: Request, exc: RequestValidationError):
+    if _is_grain_ml_path(request.url.path):
+        issues = [
+            {"location": error.get("loc", []), "message": error.get("msg", "Invalid request")}
+            for error in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=422,
+            content=jsonable_encoder({"experimental": True, "detail": "Invalid request", "issues": issues}),
+        )
+    return await request_validation_exception_handler(request, exc)
 
 
 class RequestLoggingMiddleware:

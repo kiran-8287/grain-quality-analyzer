@@ -204,6 +204,7 @@ def _damaged_unavailable(reason: str) -> Dict:
 def batch_classify_damaged(
     image_rgb: np.ndarray,
     grain_masks: List[np.ndarray],
+    grain_crops: Optional[List[np.ndarray]] = None,
 ) -> List[Dict]:
     """
     Run damaged classification for all grains in a single batched forward pass.
@@ -211,7 +212,17 @@ def batch_classify_damaged(
 
     This is ~50x faster than calling classify_damaged() per grain when a
     VGG-19 model is loaded, because it avoids 50 separate GPU/CPU dispatches.
+
+    ``grain_crops`` optionally provides the per-grain image region matching
+    each (cropped) mask.  When omitted, the masks are assumed to be
+    full-frame masks aligned with ``image_rgb``.
     """
+
+    def _image_for(index: int) -> np.ndarray:
+        if grain_crops is not None and index < len(grain_crops):
+            return grain_crops[index]
+        return image_rgb
+
     model_info = get_model_info("damaged")
     model_path = get_project_root() / model_info.get("weights_path", "")
 
@@ -219,7 +230,10 @@ def batch_classify_damaged(
         model_path.exists()
         and model_info.get("status") in ("trained", "experimental")
     ):
-        return [_classify_damaged_heuristic(image_rgb, m) for m in grain_masks]
+        return [
+            _classify_damaged_heuristic(_image_for(i), m)
+            for i, m in enumerate(grain_masks)
+        ]
 
     try:
         torch, T = _get_torch()
@@ -242,7 +256,7 @@ def batch_classify_damaged(
         tensors = []
         valid_indices = []
         for i, mask in enumerate(grain_masks):
-            padded = masked_grain_square_crop(image_rgb, mask, target_size=224)
+            padded = masked_grain_square_crop(_image_for(i), mask, target_size=224)
             if padded is None:
                 continue
             tensors.append(transform(padded))
@@ -281,7 +295,10 @@ def batch_classify_damaged(
         return results
     except Exception as e:
         logger.warning(f"VGG-19 batch inference failed: {e}. Using per-grain heuristic.")
-        return [_classify_damaged_heuristic(image_rgb, m) for m in grain_masks]
+        return [
+            _classify_damaged_heuristic(_image_for(i), m)
+            for i, m in enumerate(grain_masks)
+        ]
 
 
 # ============================================================
@@ -487,11 +504,21 @@ def _sprouted_unavailable(reason: str) -> Dict:
 def batch_classify_sprouted_weevilled(
     image_rgb: np.ndarray,
     grain_masks: List[np.ndarray],
+    grain_crops: Optional[List[np.ndarray]] = None,
 ) -> List[Dict]:
     """
     Run sprouted/weevilled classification for all grains in a single batch pass.
     Falls back to per-grain heuristic if ML model is not available.
+
+    ``grain_crops`` optionally provides the per-grain image region matching
+    each (cropped) mask.
     """
+
+    def _image_for(index: int) -> np.ndarray:
+        if grain_crops is not None and index < len(grain_crops):
+            return grain_crops[index]
+        return image_rgb
+
     model_info = get_model_info("sprouted_weevilled")
     model_path = get_project_root() / model_info.get("weights_path", "")
 
@@ -499,7 +526,10 @@ def batch_classify_sprouted_weevilled(
         model_path.exists()
         and model_info.get("status") in ("trained", "experimental")
     ):
-        return [_classify_sprouted_heuristic(image_rgb, m) for m in grain_masks]
+        return [
+            _classify_sprouted_heuristic(_image_for(i), m)
+            for i, m in enumerate(grain_masks)
+        ]
 
     try:
         torch, T = _get_torch()
@@ -515,7 +545,7 @@ def batch_classify_sprouted_weevilled(
         tensors = []
         valid_indices = []
         for i, mask in enumerate(grain_masks):
-            padded = masked_grain_square_crop(image_rgb, mask, target_size=224)
+            padded = masked_grain_square_crop(_image_for(i), mask, target_size=224)
             if padded is None:
                 continue
             tensors.append(transform(padded))
@@ -563,7 +593,10 @@ def batch_classify_sprouted_weevilled(
         return results
     except Exception as e:
         logger.warning(f"ResNet-18 batch inference failed: {e}. Using per-grain heuristic.")
-        return [_classify_sprouted_heuristic(image_rgb, m) for m in grain_masks]
+        return [
+            _classify_sprouted_heuristic(_image_for(i), m)
+            for i, m in enumerate(grain_masks)
+        ]
 
 
 # ============================================================

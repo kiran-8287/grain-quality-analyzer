@@ -32,7 +32,12 @@ backend/.env
 # Project workflow artifacts
 data/
 datasets/
+data/grain/
+raw_images/
+dataset/
+overlays/
 runs/
+runs/grain/
 weights/
 checkpoints/
 results/
@@ -42,6 +47,8 @@ tmp/
 *.tmp
 
 # Model artifacts (large binaries)
+*.pth
+*.pt
 models/*.pth
 models/*.pt
 models/*.onnx

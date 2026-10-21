@@ -18,18 +18,30 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 from ml.config import get_threshold, get_model_info, get_project_root
+from ml.segmentation.mask_ops import tight_bounds, translate_contour
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class GrainInstance:
-    """A single segmented grain instance."""
+    """
+    A single segmented grain instance.
+
+    ``mask`` is the binary mask cropped to the grain's tight bounding box and
+    ``mask_offset`` is the ``(x, y)`` position of that crop in the image.
+    Cropping keeps the memory cost of a grain proportional to the grain
+    instead of to the image, so large uploads (12 MP phone photos) do not
+    exhaust RAM.  Pixel-wise measurements on the crop are identical to the
+    full-frame mask; only the position of the mask differs, and that is
+    carried by ``mask_offset``.
+    """
     grain_id: int
-    mask: np.ndarray              # Binary mask (full image size)
-    bbox: Tuple[int, int, int, int]  # x, y, w, h
+    mask: np.ndarray              # Binary mask (tight bbox crop of the image)
+    bbox: Tuple[int, int, int, int]  # x, y, w, h (image coordinates)
     confidence: float
     centroid: Tuple[float, float]
+    mask_offset: Tuple[int, int] = (0, 0)  # (x, y) of the mask crop in the image
     contour: Optional[np.ndarray] = None
     is_touching: bool = False
     is_overlapping: bool = False
@@ -354,12 +366,20 @@ def _segment_yolov8(
 
         confidence_val = round(float(max(0.0, min(1.0, conf))), 4)
 
+        # Store the mask as a tight crop; the offset locates it in the image.
+        mask_bounds = tight_bounds(mask_arr)
+        if mask_bounds is None:
+            rejected_count += 1
+            continue
+        mx0, my0, mw, mh = mask_bounds
+
         grain = GrainInstance(
             grain_id=instance_id,
-            mask=mask_arr,
+            mask=mask_arr[my0 : my0 + mh, mx0 : mx0 + mw],
             bbox=(bx, by, bw, bh),
             confidence=confidence_val,
             centroid=(cx, cy),
+            mask_offset=(mx0, my0),
             contour=contour,
             is_touching=is_touching,
             segmentation_quality=seg_quality,
@@ -418,8 +438,13 @@ def extract_foreground_mask(
     gray = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     
-    # Check for blank / zero-variance image
-    if int(np.max(gray)) == int(np.min(gray)) or float(np.std(gray)) < 1.0:
+    # Check for blank / zero-variance image.
+    # cv2.meanStdDev computes the standard deviation in one pass without
+    # materialising a float64 copy of the frame (np.std would allocate
+    # 8 bytes per pixel, i.e. 96 MB for a 12 MP upload).
+    _gray_stats = cv2.meanStdDev(gray)
+    _gray_std = float(np.asarray(_gray_stats[1]).ravel()[0])
+    if int(np.max(gray)) == int(np.min(gray)) or _gray_std < 1.0:
         return (
             np.zeros((h, w), dtype=np.uint8),
             True,
@@ -669,21 +694,55 @@ def _segment_classical_cv(image_rgb: np.ndarray) -> SegmentationResult:
             rejected_count += 1
             continue
 
-        comp_mask = (cc_labels == label).astype(np.uint8) * 255
+        # Work on the component's bounding-box crop instead of a full-frame
+        # mask.  A full-frame mask costs image_pixels bytes per component, so a
+        # 12 MP upload with 1000 components would retain ~12.6 GB and exhaust
+        # RAM.  A 1 px zero ring reproduces the surrounding background for the
+        # distance transform; sides flush with the image edge get no ring,
+        # because the full-frame mask had no pixels (hence no background)
+        # beyond them.
+        comp_x = int(stats[label, cv2.CC_STAT_LEFT])
+        comp_y = int(stats[label, cv2.CC_STAT_TOP])
+        comp_w = int(stats[label, cv2.CC_STAT_WIDTH])
+        comp_h = int(stats[label, cv2.CC_STAT_HEIGHT])
+        pad_left = 1 if comp_x > 0 else 0
+        pad_top = 1 if comp_y > 0 else 0
+        pad_right = 1 if comp_x + comp_w < w else 0
+        pad_bottom = 1 if comp_y + comp_h < h else 0
+        # OpenCV labels connected components in 2x2 block order, so the label
+        # order depends on where the crop starts.  Extending the crop to an
+        # even offset keeps the block grid aligned with the image, which keeps
+        # the component ordering (and therefore the grain order) identical to
+        # the full-frame implementation.
+        if (comp_x - pad_left) % 2 != 0 and comp_x >= 2:
+            pad_left += 1
+        if (comp_y - pad_top) % 2 != 0 and comp_y >= 2:
+            pad_top += 1
+        comp_crop = np.zeros(
+            (comp_h + pad_top + pad_bottom, comp_w + pad_left + pad_right),
+            dtype=np.uint8,
+        )
+        comp_crop[pad_top : pad_top + comp_h, pad_left : pad_left + comp_w] = (
+            (cc_labels[comp_y : comp_y + comp_h, comp_x : comp_x + comp_w] == label)
+            .astype(np.uint8)
+            * 255
+        )
 
         # Split cluster if touching grains are present
-        splits = _split_grain_cluster(comp_mask, median_area, min_grain_area=min_area)
+        splits = _split_grain_cluster(comp_crop, median_area, min_grain_area=min_area)
         was_touching = len(splits) > 1
         if was_touching:
             estimated_merged += len(splits) - 1
 
         for s_mask in splits:
-            s_area = int(np.sum(s_mask > 0))
+            # Drop the zero ring: back to the component's own crop frame.
+            s_crop = s_mask[pad_top : pad_top + comp_h, pad_left : pad_left + comp_w]
+            s_area = int(np.sum(s_crop > 0))
             if s_area < min_area:
                 rejected_count += 1
                 continue
 
-            contours, _ = cv2.findContours(s_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            contours, _ = cv2.findContours(s_crop, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
             if not contours:
                 rejected_count += 1
                 continue
@@ -699,8 +758,8 @@ def _segment_classical_cv(image_rgb: np.ndarray) -> SegmentationResult:
                 rejected_count += 1
                 continue
 
-            cx = float(M["m10"] / M["m00"])
-            cy = float(M["m01"] / M["m00"])
+            cx = float(comp_x + M["m10"] / M["m00"])
+            cy = float(comp_y + M["m01"] / M["m00"])
 
             area_ratio = s_area / median_area if median_area > 0 else 1.0
             aspect = max(bw, bh) / (min(bw, bh) + 1e-6)
@@ -715,14 +774,22 @@ def _segment_classical_cv(image_rgb: np.ndarray) -> SegmentationResult:
             solidity = s_area / hull_area if hull_area > 0 else 0
             confidence = min(1.0, solidity * 0.7 + 0.3)
 
+            # Store the grain mask as a tight crop; the offset locates it.
+            bounds = tight_bounds(s_crop)
+            if bounds is None:
+                rejected_count += 1
+                continue
+            bx0, by0, bw0, bh0 = bounds
+
             grain_id += 1
             grain = GrainInstance(
                 grain_id=grain_id,
-                mask=s_mask,
-                bbox=(x, y, bw, bh),
+                mask=s_crop[by0 : by0 + bh0, bx0 : bx0 + bw0],
+                bbox=(comp_x + x, comp_y + y, bw, bh),
                 confidence=round(float(confidence), 4),
                 centroid=(cx, cy),
-                contour=contour,
+                mask_offset=(comp_x + bx0, comp_y + by0),
+                contour=translate_contour(contour, (comp_x, comp_y)),
                 is_touching=is_touching,
                 segmentation_quality=seg_quality,
                 method="classical_cv_fallback",

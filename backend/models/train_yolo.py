@@ -1,105 +1,49 @@
-#!/usr/bin/env python3
-"""
-train_yolo.py -- Ultralytics YOLO for FOREIGN MATTER (husks, stones, ...) on the green sheet.
-
-Rice grains are deliberately NOT labelled here: they are the "background" this detector must
-learn to ignore, which is exactly what you want for impurity counting.
-
-Dataset file (written for you by prepare_data.py as dataset/yolo/foreign.yaml):
-
-    path: /abs/path/to/dataset/yolo
-    train: images/train
-    val: images/val
-    names:
-      0: foreign_matter          # or  0: husk / 1: stone  if annotated separately
-
-Example
--------
-python train_yolo.py --data dataset/yolo/foreign.yaml --model yolo11s.pt --imgsz 1280 --batch 8
-python train_yolo.py --data dataset/yolo/foreign.yaml --p2          # extra stride-4 head for tiny objects
-
-Small-object checklist
-----------------------
-1. Effective pixel size matters more than any hyper-parameter. YOLO letterboxes a 4000 px
-   photo down to --imgsz. If foreign pieces end up smaller than ~16 px, raise --imgsz
-   (1536-1920) or tile the photos into overlapping 1280 px crops before training
-   (SAHI `slice_coco` does this) and tile again at inference.
-2. --p2 adds a stride-4 detection head (yolov8-p2). Costs ~25-40% more compute.
-3. Do not use rotation augmentation with axis-aligned boxes: it inflates the labels.
-   Your physical shaking already provides rotation; we only flip.
-"""
 import argparse
+import shutil
+from pathlib import Path
 
+import torch
 from ultralytics import YOLO
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", required=True, help="path to foreign.yaml")
-    ap.add_argument("--model", default="yolo11s.pt", help="yolo11n/s/m.pt or yolov8s.pt ...")
-    ap.add_argument("--p2", action="store_true", help="use yolov8s-p2 (extra high-resolution head)")
-    ap.add_argument("--imgsz", type=int, default=1280)
-    ap.add_argument("--epochs", type=int, default=150)
-    ap.add_argument("--batch", type=int, default=8, help="-1 = auto (single GPU only)")
-    ap.add_argument("--device", default="0", help="'0', '0,1' or 'cpu'")
-    ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--project", default="runs/foreign")
-    ap.add_argument("--name", default="exp")
-    ap.add_argument("--patience", type=int, default=30, help="early-stop patience (epochs)")
+    ap.add_argument("--name", required=True)
+    ap.add_argument("--model", default="yolo11s-seg.pt")
     args = ap.parse_args()
-
-    if args.p2:
-        # build the P2 architecture and transfer every COCO weight whose shape still matches
-        model = YOLO("yolov8s-p2.yaml").load("yolov8s.pt")
-    else:
-        model = YOLO(args.model)
-
-    model.train(
-        data=args.data,
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=args.device,
-        workers=args.workers,
-        project=args.project,
-        name=args.name,
-        patience=args.patience,
-        seed=0,
-        deterministic=True,
-        # ---- optimiser ---------------------------------------------------------------------
-        optimizer="AdamW",      # robust on small datasets; lr0=0.002 is a sensible AdamW start for 1 class
-        lr0=0.002,
-        lrf=0.01,               # final lr = lr0 * lrf
-        cos_lr=True,
-        warmup_epochs=3,
-        weight_decay=0.0005,
-        # ---- augmentation (small-object friendly) -----------------------------------------------
-        mosaic=1.0,             # 4 photos per sample: many more small objects per batch
-        close_mosaic=15,        # last 15 epochs without mosaic -> matches real photos
-        scale=0.3,              # default 0.5 shrinks already tiny objects too aggressively
-        translate=0.1,
-        degrees=0.0,            # no rotation: would inflate axis-aligned boxes
-        shear=0.0,
-        perspective=0.0,
-        fliplr=0.5,
-        flipud=0.5,             # a top-down sheet has no 'up'
-        hsv_h=0.01,             # keep hue nearly fixed: sheet colour is a stable cue
-        hsv_s=0.5,
-        hsv_v=0.3,
-        mixup=0.0,
-        copy_paste=0.0,
-        # ---- misc ------------------------------------------------------------------------------
-        max_det=300,            # ~50 impurities per photo expected; plenty of head-room
-        amp=True,
-        plots=True,
-        val=True,
-    )
-
-    metrics = model.val(data=args.data, imgsz=args.imgsz, split="val", conf=0.001, iou=0.6)
-    print(f"\nval  mAP50 {metrics.box.map50:.3f} | mAP50-95 {metrics.box.map:.3f} | "
-          f"precision {metrics.box.mp:.3f} | recall {metrics.box.mr:.3f}")
-    print("weights: ", model.trainer.best)
-    print("Inference tip: model.predict(img, imgsz=%d, conf=0.25, iou=0.5, max_det=300)" % args.imgsz)
+    data = ROOT / "data" / "yolo" / "data.yaml"
+    if not data.is_file():
+        raise SystemExit(f"Missing dataset config: {data}; run build_dataset.py --source reviewed first")
+    plans = [(4, 1280), (2, 1280), (2, 1024)]
+    for attempt, (batch, imgsz) in enumerate(plans):
+        model = None
+        try:
+            model = YOLO(args.model)
+            model.train(data=str(data), imgsz=imgsz, epochs=150, patience=30, batch=batch,
+                        cos_lr=True, amp=True, workers=2, close_mosaic=15, mosaic=1.0,
+                        degrees=90, flipud=0.5, fliplr=0.5, scale=0.4, translate=0.1,
+                        hsv_h=0.01, hsv_s=0.4, hsv_v=0.4, copy_paste=0.2, mixup=0,
+                        overlap_mask=True, max_det=2000, seed=0, project=str(ROOT / "runs"),
+                        name=args.name, exist_ok=True)
+            metrics = model.val(data=str(data), imgsz=imgsz, split="val", max_det=2000)
+            print(f"val mask mAP50={metrics.seg.map50:.4f}")
+            for i, score in enumerate(metrics.seg.ap50):
+                print(f"class {i} mask mAP50={score:.4f}")
+            best = Path(model.trainer.best)
+            dest = ROOT / "models" / "weights" / f"{args.name}.pt"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(best, dest)
+            print(f"weights: {dest}")
+            return
+        except Exception as exc:
+            oom = isinstance(exc, torch.cuda.OutOfMemoryError) or "cuda out of memory" in str(exc).lower()
+            if not oom or attempt == len(plans) - 1:
+                raise
+            print(f"CUDA OOM at batch={batch}, imgsz={imgsz}; retrying batch={plans[attempt + 1][0]}, imgsz={plans[attempt + 1][1]}")
+            if model is not None: del model
+            torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

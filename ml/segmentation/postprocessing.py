@@ -23,6 +23,11 @@ from ml.config import (
     get_project_root,
     get_threshold,
 )
+from ml.segmentation.mask_ops import (
+    dilated_overlap,
+    extents_intersect,
+    mask_iou,
+)
 
 PROJECT_ROOT = get_project_root()
 
@@ -413,6 +418,10 @@ class PostProcessor:
 
         For pairs where box IoU passed the first stage but mask IoU > threshold,
         keep the detection with higher confidence and discard the other.
+
+        Masks are stored as bounding-box crops with an image-space offset, so
+        only pairs whose crops can possibly overlap are compared.  This keeps
+        the stage usable on images with hundreds of objects.
         """
         if len(detections) <= 1:
             return list(detections)
@@ -434,6 +443,7 @@ class PostProcessor:
             mask_i = det_i.get("mask")
             if mask_i is None:
                 continue
+            off_i = det_i.get("mask_offset") or (0, 0)
             for j in sorted_indices[idx_i + 1 :]:
                 if j in suppressed:
                     continue
@@ -441,17 +451,11 @@ class PostProcessor:
                 mask_j = det_j.get("mask")
                 if mask_j is None:
                     continue
-                if mask_i.shape != mask_j.shape:
-                    h = max(mask_i.shape[0], mask_j.shape[0])
-                    w = max(mask_i.shape[1], mask_j.shape[1])
-                    mi = np.zeros((h, w), dtype=bool)
-                    mj = np.zeros((h, w), dtype=bool)
-                    mi[: mask_i.shape[0], : mask_i.shape[1]] = mask_i.astype(bool)
-                    mj[: mask_j.shape[0], : mask_j.shape[1]] = mask_j.astype(bool)
-                    iou = self._compute_mask_iou(mi, mj)
-                else:
-                    iou = self._compute_mask_iou(mask_i, mask_j)
-                if iou > iou_threshold:
+                off_j = det_j.get("mask_offset") or (0, 0)
+                if not extents_intersect(off_i, mask_i.shape, off_j, mask_j.shape):
+                    continue
+                iou = mask_iou(mask_i, off_i, mask_j, off_j)
+                if iou > mask_iou_threshold:
                     suppressed.add(j)
 
         return [detections[k] for k in keep]
@@ -516,6 +520,9 @@ class PostProcessor:
         """
         For each detection, set is_touching=True when its mask dilated with a
         3x3 kernel (1 iteration) intersects any *other* detection's mask.
+
+        Masks are bounding-box crops with image-space offsets; only pairs whose
+        crops can overlap are compared.
         """
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
         n = len(detections)
@@ -526,34 +533,25 @@ class PostProcessor:
             (d.get("mask") if isinstance(d.get("mask"), np.ndarray) else None)
             for d in detections
         ]
-        dilated = []
-        for m in masks:
-            if m is None:
-                dilated.append(None)
-                continue
-            m_bin = (m > 0).astype(np.uint8)
-            dilated.append(cv2.dilate(m_bin, kernel, iterations=1))
+        offsets = [
+            (d.get("mask_offset") or (0, 0)) if isinstance(d.get("mask"), np.ndarray) else (0, 0)
+            for d in detections
+        ]
 
         for i in range(n):
-            if dilated[i] is None:
+            if masks[i] is None:
                 continue
             for j in range(i + 1, n):
-                if dilated[j] is None:
+                if masks[j] is None:
                     continue
-                di = dilated[i]
-                dj = masks[j]
-                if di is None or dj is None:
+                # The dilated mask reaches one pixel beyond its crop.
+                if not extents_intersect(
+                    offsets[i], masks[i].shape, offsets[j], masks[j].shape, pad=1
+                ):
                     continue
-                if di.shape != dj.shape:
-                    h = max(di.shape[0], dj.shape[0])
-                    w = max(di.shape[1], dj.shape[1])
-                    di_p = np.zeros((h, w), dtype=np.uint8)
-                    dj_p = np.zeros((h, w), dtype=np.uint8)
-                    di_p[: di.shape[0], : di.shape[1]] = di
-                    dj_p[: dj.shape[0], : dj.shape[1]] = (dj > 0).astype(np.uint8)
-                    overlap = float(np.logical_and(di_p > 0, dj_p > 0).sum())
-                else:
-                    overlap = float(np.logical_and(di > 0, dj > 0).sum())
+                overlap = dilated_overlap(
+                    masks[i], offsets[i], masks[j], offsets[j], kernel=kernel
+                )
                 if overlap > 0:
                     detections[i]["is_touching"] = True
                     detections[j]["is_touching"] = True

@@ -76,16 +76,20 @@ def compute_grain_geometry(
     mask: Optional[np.ndarray] = None,
     grain_id: int = 1,
     pixels_per_mm: Optional[float] = None,
+    offset: Tuple[int, int] = (0, 0),
     **kwargs,
 ) -> GrainGeometry:
     """
     Compute geometric properties for a single grain mask.
-    
+
     Args:
-        mask: Binary mask (uint8, 0/255) for one grain
+        mask: Binary mask (uint8, 0/255) for one grain.  May be a tight
+            bounding-box crop of the image instead of a full-frame mask.
         grain_id: Unique grain identifier
         pixels_per_mm: If available, convert to mm
-        
+        offset: (x, y) position of the mask crop in the image.  Positions
+            (bbox, centroid) are reported in image coordinates.
+
     Returns:
         GrainGeometry object
     """
@@ -228,6 +232,19 @@ def compute_grain_geometry(
         length_mm = length_pixels / pixels_per_mm
         breadth_mm = breadth_pixels / pixels_per_mm
         effective_length_mm = effective_length_pixels / pixels_per_mm
+
+    # Report positions in image coordinates (the mask may be a crop).
+    off_x, off_y = int(offset[0]), int(offset[1])
+    cx = cx + off_x
+    cy = cy + off_y
+    x = x + off_x
+    y = y + off_y
+    if fitted_ellipse is not None:
+        (ecx, ecy), (ma, MA), angle = fitted_ellipse
+        fitted_ellipse = ((ecx + off_x, ecy + off_y), (ma, MA), angle)
+    if min_rect is not None:
+        (rcx, rcy), (rw, rh), angle = min_rect
+        min_rect = ((rcx + off_x, rcy + off_y), (rw, rh), angle)
     
     # Anomaly detection
     is_anomalous = False

@@ -3,14 +3,19 @@ API Routes for GRAIN QUALITY ANALYZER.
 """
 
 import base64
+import asyncio
 import logging
+import math
+import time
 from typing import Any, Optional
 
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from backend.app.schemas.models import (
     AnalysisResultResponse,
+    ExperimentalGrainAnalysisResponse,
     HealthResponse,
     JobStatusResponse,
     ModelsResponse,
@@ -18,6 +23,7 @@ from backend.app.schemas.models import (
 )
 from backend.app.services.export import export_result_csv, export_result_json
 from backend.app.services.job_manager import job_manager
+from backend.app.services.run_logger import structured_logger
 from ml.config import load_model_registry, load_standards
 
 logger = logging.getLogger(__name__)
@@ -107,6 +113,89 @@ async def analyze_rice_image(
         raise HTTPException(status_code=400, detail=result.get("error"))
 
     return _sanitize_numpy(result)
+
+
+@router.post("/analyze-ml", response_model=ExperimentalGrainAnalysisResponse)
+async def analyze_grain_ml(
+    request: Request,
+    file: UploadFile = File(...),
+    px_per_mm: Optional[float] = Form(None),
+):
+    """Run the isolated experimental Mask R-CNN + YOLO analysis endpoint."""
+    runtime = getattr(request.app.state, "grain_ml_runtime", None)
+    if runtime is None:
+        message = getattr(
+            request.app.state,
+            "grain_ml_error",
+            "Experimental grain models are not configured or available.",
+        )
+        raise HTTPException(status_code=503, detail=message)
+
+    supported_types = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if content_type not in supported_types:
+        raise HTTPException(status_code=415, detail="Upload a JPEG, PNG, WebP, or BMP image.")
+
+    max_bytes = runtime.config.max_upload_bytes
+    contents = await file.read(max_bytes + 1)
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+    if len(contents) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Image exceeds the {max_bytes}-byte upload limit.")
+    if px_per_mm is not None and (not math.isfinite(px_per_mm) or px_per_mm <= 0):
+        raise HTTPException(status_code=422, detail="px_per_mm must be a finite positive number.")
+
+    request_id = getattr(request.state, "request_id", None)
+    started = time.perf_counter()
+    structured_logger.info(
+        "grain_ml_analysis_started",
+        job_id=request_id,
+        content_type=content_type,
+        bytes_received=len(contents),
+    )
+    try:
+        result = await asyncio.wait_for(
+            run_in_threadpool(runtime.analyze_image, contents, px_per_mm),
+            timeout=runtime.config.timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+        structured_logger.error(
+            "grain_ml_analysis_failed",
+            job_id=request_id,
+            error_type="TimeoutError",
+            duration_ms=elapsed_ms,
+        )
+        raise HTTPException(status_code=504, detail="Experimental grain analysis timed out.")
+    except ValueError as exc:
+        structured_logger.error(
+            "grain_ml_analysis_failed",
+            job_id=request_id,
+            error_type=type(exc).__name__,
+            message=str(exc),
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Experimental grain inference failed")
+        structured_logger.error(
+            "grain_ml_analysis_failed",
+            job_id=request_id,
+            error_type=type(exc).__name__,
+            message=str(exc),
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        raise HTTPException(status_code=500, detail="Experimental grain inference failed.") from exc
+
+    duration_ms = round((time.perf_counter() - started) * 1000, 2)
+    structured_logger.info(
+        "grain_ml_analysis_completed",
+        job_id=request_id,
+        duration_ms=duration_ms,
+        device=result.get("device"),
+        experimental=True,
+    )
+    return result
 
 
 @router.get("/analysis/{job_id}", response_model=JobStatusResponse)

@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 from ml.config import get_model_info, get_project_root, get_threshold
+from ml.segmentation.mask_ops import draw_mask
 
 logger = logging.getLogger(__name__)
 
@@ -67,24 +68,30 @@ class ForeignMatterResult:
 def detect_foreign_matter(
     image_rgb: np.ndarray,
     grain_masks: Optional[List[np.ndarray]] = None,
+    grain_mask_offsets: Optional[List[Tuple[int, int]]] = None,
 ) -> ForeignMatterResult:
     """
     Detect foreign matter in the full image.
-    
+
     Args:
         image_rgb: Full RGB image
-        grain_masks: Optional list of grain masks (to exclude rice regions)
+        grain_masks: Optional list of grain masks (to exclude rice regions).
+            Masks may be tight bounding-box crops.
+        grain_mask_offsets: Optional image-space (x, y) offset for each mask.
+            When omitted, masks are assumed to be full-frame masks.
     """
     start_time = time.time()
-    
+
     model_info = get_model_info("foreign_matter")
     model_path = get_project_root() / model_info.get("weights_path", "")
-    
+
     if model_path.exists() and model_info.get("status") == "trained":
         result = _detect_foreign_yolo(image_rgb, model_path, grain_masks)
     else:
-        result = _detect_foreign_heuristic(image_rgb, grain_masks)
-    
+        result = _detect_foreign_heuristic(
+            image_rgb, grain_masks, grain_mask_offsets=grain_mask_offsets
+        )
+
     result.processing_time_seconds = time.time() - start_time
     return result
 
@@ -240,6 +247,7 @@ def _detect_foreign_yolo(
 def _detect_foreign_heuristic(
     image_rgb: np.ndarray,
     grain_masks: Optional[List[np.ndarray]],
+    grain_mask_offsets: Optional[List[Tuple[int, int]]] = None,
 ) -> ForeignMatterResult:
     """
     Heuristic fallback for foreign matter detection.
@@ -256,8 +264,13 @@ def _detect_foreign_heuristic(
     # Create a combined rice mask
     rice_mask = np.zeros((h, w), dtype=np.uint8)
     if grain_masks:
-        for gm in grain_masks:
-            if gm.shape == (h, w):
+        for i, gm in enumerate(grain_masks):
+            if gm is None:
+                continue
+            if grain_mask_offsets is not None and i < len(grain_mask_offsets):
+                # Cropped mask: draw it at its image-space offset.
+                draw_mask(rice_mask, gm, grain_mask_offsets[i])
+            elif gm.shape == (h, w):
                 rice_mask = cv2.bitwise_or(rice_mask, gm)
 
     padding = max(
