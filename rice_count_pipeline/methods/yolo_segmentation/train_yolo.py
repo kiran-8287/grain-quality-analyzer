@@ -10,6 +10,7 @@ import torch
 from ultralytics import YOLO
 
 DATA_HOME = ROOT.parent / "data" / "rice_count"
+ARTIFACTS = ROOT.parent / "models" / "experiments" / "yolo_segmentation"
 
 
 def main():
@@ -30,14 +31,14 @@ def main():
                         degrees=90, flipud=0.5, fliplr=0.5, scale=0.4, translate=0.1,
                         hsv_h=0.01, hsv_s=0.4, hsv_v=0.4, copy_paste=0.2, mixup=0,
                         overlap_mask=True, max_det=1000, seed=0,
-                        project=str(ROOT / "methods" / "yolo_segmentation" / "runs"),
+                        project=str(ARTIFACTS / "runs"),
                         name=args.name, exist_ok=True)
             metrics = model.val(data=str(data), imgsz=imgsz, split="val", max_det=2000)
             print(f"val mask mAP50={metrics.seg.map50:.4f}")
             for i, score in enumerate(metrics.seg.ap50):
                 print(f"class {i} mask mAP50={score:.4f}")
             best = Path(model.trainer.best)
-            dest = ROOT / "methods" / "yolo_segmentation" / "weights" / f"{args.name}.pt"
+            dest = ARTIFACTS / f"{args.name}.pt"
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(best, dest)
             print(f"weights: {dest}")

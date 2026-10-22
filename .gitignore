@@ -43,19 +43,7 @@ backend/.env
 # Generated rice-count method outputs (keep method code and READMEs)
 /rice_count_pipeline/methods/autolabel_proxy/results/
 /rice_count_pipeline/methods/area_count/results/
-/rice_count_pipeline/methods/yolo_segmentation/runs/
-/rice_count_pipeline/methods/yolo_segmentation/weights/
-/rice_count_pipeline/methods/yolo_segmentation/results/
-/rice_count_pipeline/methods/weak_count_model/predictions/
-/rice_count_pipeline/methods/weak_count_model/scale_check/
-/rice_count_pipeline/methods/weak_count_model/ultralytics_config/
-/rice_count_pipeline/methods/weak_count_model/mpl_cache/
-/rice_count_pipeline/methods/weak_count_model/torch_cache/
-/rice_count_pipeline/methods/weak_count_model/pseudo_counts.csv
-/rice_count_pipeline/methods/weak_count_model/skipped.csv
-/rice_count_pipeline/methods/weak_count_model/count_fit_vs_pseudo_labels.csv
-/rice_count_pipeline/methods/weak_count_model/runs/
-/rice_count_pipeline/methods/weak_count_model/weights/
+/models/experiments/
 
 # Project workflow artifacts
 data/
@@ -109,5 +97,3 @@ Thumbs.db
 kilo.json
 AGENTS.md
 currenttask.md
-
-docs/

@@ -38,7 +38,7 @@ logging.basicConfig(
     ],
 )
 
-logs_dir = PROJECT_ROOT / "logs"
+logs_dir = Path(os.environ.get("GRAIN_LOG_DIR", PROJECT_ROOT / "monitoring" / "logs"))
 logs_dir.mkdir(parents=True, exist_ok=True)
 file_handler = RotatingFileHandler(
     logs_dir / "app.log",

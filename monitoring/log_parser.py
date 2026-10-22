@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
+DEFAULT_LOG_DIR = PROJECT_ROOT / "monitoring" / "logs"
 DEFAULT_LOG_FILE = DEFAULT_LOG_DIR / "app.log"
 MAX_PARSE_ERRORS = 50
 DEFAULT_MAX_LINES = 200_000

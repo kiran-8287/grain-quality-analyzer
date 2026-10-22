@@ -4,14 +4,19 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-os.environ.setdefault("YOLO_CONFIG_DIR", str(ROOT / "ultralytics_config"))
-os.environ.setdefault("TORCH_HOME", str(ROOT / "torch_cache"))
-os.environ.setdefault("MPLCONFIGDIR", str(ROOT / "mpl_cache"))
+PROJECT = ROOT.parent.parent
+REPO_ROOT = PROJECT.parent
+DATA_HOME = REPO_ROOT / "data" / "rice_count"
+ARTIFACTS = REPO_ROOT / "models" / "experiments" / "weak_count_model"
+RUNTIME_CACHE = DATA_HOME / "work" / "runtime_cache"
+os.environ.setdefault("YOLO_CONFIG_DIR", str(ARTIFACTS / "ultralytics_config"))
+os.environ.setdefault("TORCH_HOME", str(RUNTIME_CACHE / "torch"))
+os.environ.setdefault("MPLCONFIGDIR", str(RUNTIME_CACHE / "matplotlib"))
 
 import cv2
 from ultralytics import YOLO
 
-WEIGHTS = ROOT / "models" / "weak_count.pt"
+WEIGHTS = ARTIFACTS / "weak_count.pt"
 MAX_DET = 2000
 
 
@@ -41,7 +46,7 @@ def main():
     vis = result.plot()
     cv2.putText(vis, f"rice={counts[0]} foreign={counts[1]}", (24, 48),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3, cv2.LINE_AA)
-    target = args.out or ROOT / "predictions" / f"{args.image.stem}_count.jpg"
+    target = args.out or ARTIFACTS / "predictions" / f"{args.image.stem}_count.jpg"
     target.parent.mkdir(parents=True, exist_ok=True)
     if not cv2.imwrite(str(target), vis):
         raise OSError(f"Could not write overlay: {target}")

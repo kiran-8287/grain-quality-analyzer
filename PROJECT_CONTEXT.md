@@ -453,7 +453,7 @@ analysis_completed status=success
 
 Log files are runtime artifacts.
 
-logs/
+monitoring/logs/
 and *.log
 must remain ignored by Git.
 

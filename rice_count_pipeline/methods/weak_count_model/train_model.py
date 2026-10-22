@@ -9,9 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parent.parent
 DATA_HOME = PROJECT.parent / "data" / "rice_count"
-os.environ.setdefault("YOLO_CONFIG_DIR", str(ROOT / "ultralytics_config"))
-os.environ.setdefault("TORCH_HOME", str(ROOT / "torch_cache"))
-os.environ.setdefault("MPLCONFIGDIR", str(ROOT / "mpl_cache"))
+REPO_ROOT = PROJECT.parent
+ARTIFACTS = REPO_ROOT / "models" / "experiments" / "weak_count_model"
+RUNTIME_CACHE = DATA_HOME / "work" / "runtime_cache"
+os.environ.setdefault("YOLO_CONFIG_DIR", str(ARTIFACTS / "ultralytics_config"))
+os.environ.setdefault("TORCH_HOME", str(RUNTIME_CACHE / "torch"))
+os.environ.setdefault("MPLCONFIGDIR", str(RUNTIME_CACHE / "matplotlib"))
 
 import numpy as np
 import torch
@@ -19,15 +22,16 @@ from ultralytics import YOLO
 
 SEED = 0
 DATA = DATA_HOME / "datasets" / "weak_count_model" / "data.yaml"
-RUNS = ROOT / "runs"
-WEIGHTS = ROOT / "models" / "weak_count.pt"
+PSEUDO_COUNTS = DATA_HOME / "work" / "weak_count_model" / "pseudo_counts.csv"
+RUNS = ARTIFACTS / "runs"
+WEIGHTS = ARTIFACTS / "weak_count.pt"
 MAX_DET = 2000
 
 
 def score_counts(model, split):
     image_dir = DATA_HOME / "datasets" / "weak_count_model" / "images" / split
     targets = {}
-    with (ROOT / "pseudo_counts.csv").open(newline="", encoding="utf-8-sig") as f:
+    with PSEUDO_COUNTS.open(newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             if row["split"] == split:
                 targets[row["file"]] = (int(row["pseudo_rice"]), int(row["pseudo_foreign"]))
@@ -65,7 +69,7 @@ def write_count_report(model):
     train_rows = score_counts(model, "train")
     val_rows = score_counts(model, "val")
     all_rows = [{**r, "split": s} for s, rr in (("train", train_rows), ("val", val_rows)) for r in rr]
-    report = ROOT / "count_fit_vs_pseudo_labels.csv"
+    report = ARTIFACTS / "count_fit_vs_pseudo_labels.csv"
     with report.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(all_rows[0]))
         writer.writeheader()

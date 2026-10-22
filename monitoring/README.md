@@ -8,8 +8,8 @@ The dashboard reads structured JSON Lines logs written by the application. It ne
 
 ## Log Location
 
-- Primary log file: `logs/app.log`
-- Rotated files: `logs/app.log.1`, `logs/app.log.2`, etc.
+- Primary log file: `monitoring/logs/app.log`
+- Rotated files: `monitoring/logs/app.log.1`, `monitoring/logs/app.log.2`, etc.
 - Log rotation: size-based, 10 MB max, 5 backups (configured in `backend/app/main.py`)
 
 ## Startup
@@ -27,7 +27,7 @@ Start the dashboard:
 > module invocation above avoids that issue.
 
 Environment variables:
-- `GRAIN_LOG_DIR` — optional override for the log directory (default: `logs/`)
+- `GRAIN_LOG_DIR` — optional override for the log directory (default: `monitoring/logs/`)
 
 ## Dashboard Tabs
 

@@ -10,6 +10,7 @@ from ultralytics import YOLO
 
 MAX_DET = 2000
 assert MAX_DET >= 2000
+ARTIFACTS = ROOT.parent / "models" / "experiments" / "yolo_segmentation"
 
 
 def _tiles(width, height, size, overlap):
@@ -110,7 +111,7 @@ def main():
             cv2.polylines(image, [np.asarray(item["polygon"], np.int32)], True, color, 2)
     cv2.putText(image, f"Rice {result['n_rice']}  Foreign {result['n_foreign']}", (20, 45),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 0, 0), 3)
-    overlay = args.overlay or ROOT / "methods" / "yolo_segmentation" / "results" / f"{args.image.stem}_count.jpg"
+    overlay = args.overlay or ARTIFACTS / "predictions" / f"{args.image.stem}_count.jpg"
     overlay.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(overlay), image)
     print(f"overlay={overlay}")

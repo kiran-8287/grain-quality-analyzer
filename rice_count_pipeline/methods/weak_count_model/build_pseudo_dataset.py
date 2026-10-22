@@ -20,6 +20,7 @@ GROUPS = DATA_HOME / "work" / "layout_groups" / "groups.csv"
 DATASET = DATA_HOME / "datasets" / "weak_count_model"
 CACHE = DATA_HOME / "work" / "weak_count_model" / "label_cache"
 LABEL_INPUTS = DATA_HOME / "work" / "weak_count_model" / "label_inputs"
+REPORTS = DATA_HOME / "work" / "weak_count_model"
 SEED = 0
 LONG_SIDE = 1536
 MIN_AREA = 56
@@ -181,9 +182,10 @@ def main():
     val_n = sum(r["split"] == "val" for r in usable)
     if not train_n or not val_n:
         raise SystemExit("Insufficient pseudo-labeled images for both train and validation")
+    REPORTS.mkdir(parents=True, exist_ok=True)
     for name, data in (("pseudo_counts.csv", rows), ("skipped.csv", failed)):
         fields = list(data[0]) if data else ["file", "group_id", "split", "reason"]
-        with (ROOT / name).open("w", newline="", encoding="utf-8") as f:
+        with (REPORTS / name).open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
             writer.writerows(data)
@@ -195,7 +197,7 @@ def main():
           f"foreign {FOREIGN_COUNT_RANGE[0]}-{FOREIGN_COUNT_RANGE[1]}; "
           f"excluded {len(rows)-len(usable)} pseudo-count outliers")
     print(f"training dataset: {len(usable)} images; train={train_n} val={val_n}")
-    print(f"pseudo-label report: {ROOT / 'pseudo_counts.csv'}")
+    print(f"pseudo-label report: {REPORTS / 'pseudo_counts.csv'}")
 
 
 if __name__ == "__main__":

@@ -63,8 +63,7 @@ A:\grain\
 │   ├── vite.config.ts
 │   ├── tailwind.config.js
 │   └── tsconfig.json
-├── grain_profiles/           # Grain reference profiles
-├── logs/                     # Application logs (ignored)
+├── grain_profiles/           # Active grain reference profiles
 ├── ml/                       # Machine learning modules
 │   ├── config.py
 │   ├── quality/              # Quality classification modules
@@ -79,9 +78,12 @@ A:\grain\
 │   │   ├── rice_gate.py
 │   │   └── segmentation.py
 │   └── standards/            # Standards comparison modules
-├── models/                   # Model artifacts and mappings (ignored binaries)
+├── models/                   # Model mappings and experiment artifacts
 │   ├── foreign_matter/
-│   └── segmentation/
+│   ├── segmentation/
+│   └── experiments/           # Experimental checkpoints and training runs
+├── monitoring/               # Read-only dashboard and operational logs
+│   └── logs/                  # Application logs (ignored)
 ├── node_modules/             # Frontend dependencies (ignored)
 ├── package.json              # Root package.json (concurrently)
 ├── package-lock.json
@@ -101,7 +103,10 @@ A:\grain\
 
 From the repository root (`A:\grain\`):
 
-```bash
+```powershell
+# Use the shared Python 3.11 backend environment
+.\backend\.venv\Scripts\Activate.ps1
+
 # Install root dependencies (concurrently)
 npm install
 

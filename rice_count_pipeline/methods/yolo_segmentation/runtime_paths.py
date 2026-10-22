@@ -3,9 +3,11 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CACHE = ROOT / ".cache"
+PROJECT_ROOT = ROOT.parent
+WORK = PROJECT_ROOT / "data" / "rice_count" / "work"
+CACHE = WORK / "runtime_cache"
 for key, path in {
-    "TEMP": ROOT / "tmp", "TMP": ROOT / "tmp",
+    "TEMP": WORK / "tmp", "TMP": WORK / "tmp",
     "TORCH_HOME": CACHE / "torch", "YOLO_CONFIG_DIR": CACHE / "ultralytics",
     "MPLCONFIGDIR": CACHE / "matplotlib",
 }.items():

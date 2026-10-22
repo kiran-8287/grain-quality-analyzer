@@ -7,17 +7,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parent.parent
-DATA_HOME = PROJECT.parent / "data" / "rice_count"
-os.environ.setdefault("YOLO_CONFIG_DIR", str(ROOT / "ultralytics_config"))
-os.environ.setdefault("TORCH_HOME", str(ROOT / "torch_cache"))
-os.environ.setdefault("MPLCONFIGDIR", str(ROOT / "mpl_cache"))
+REPO_ROOT = PROJECT.parent
+DATA_HOME = REPO_ROOT / "data" / "rice_count"
+ARTIFACTS = REPO_ROOT / "models" / "experiments" / "weak_count_model"
+RUNTIME_CACHE = DATA_HOME / "work" / "runtime_cache"
+os.environ.setdefault("YOLO_CONFIG_DIR", str(ARTIFACTS / "ultralytics_config"))
+os.environ.setdefault("TORCH_HOME", str(RUNTIME_CACHE / "torch"))
+os.environ.setdefault("MPLCONFIGDIR", str(RUNTIME_CACHE / "matplotlib"))
 
 import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
 
-WEIGHTS = ROOT / "models" / "weak_count.pt"
+WEIGHTS = ARTIFACTS / "weak_count.pt"
 NAME_COUNTS = re.compile(r"(\d+)\s*whole\s*,?\s*(\d+)\s*broken\s*,?\s*(\d+)\s*stones", re.I)
 MAX_DET = 2000
 
@@ -75,7 +78,7 @@ def main():
                    if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"})
     if not paths:
         raise SystemExit(f"No images under {args.source}")
-    out = ROOT / "predictions" / "test_set"
+    out = ARTIFACTS / "predictions" / "test_set"
     overlays = out / "overlays"
     mask_overlays = out / "mask_overlays"
     overlays.mkdir(parents=True, exist_ok=True)

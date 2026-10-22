@@ -106,4 +106,4 @@ Then check `http://localhost:10000/health` and `/docs`. These exact live HTTP st
 3. Frontend calls same-origin paths and has no Vite proxy; set the actual `VITE_API_BASE_URL` env name to the API host when running on separate ports.
 4. The primary configured model registry points to missing placeholder checkpoints. Normal analysis falls back to classical CV.
 5. There is no complete reviewed training export or current rice checkpoint. Do not report synthetic/demo metrics as real-data validation.
-6. Check local `logs/`/`runs/` artifacts before sharing externally; they may contain user image files, result images or filenames. Never share `.env` values, credentials, private images or raw dataset without explicit curation.
+6. Check local `monitoring/logs/`/`runs/` artifacts before sharing externally; they may contain user image files, result images or filenames. Never share `.env` values, credentials, private images or raw dataset without explicit curation.
