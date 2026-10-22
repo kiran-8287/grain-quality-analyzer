@@ -101,6 +101,11 @@ The UI includes some sample metrics beyond core Whole/Broken, with types in `fro
 
 ## Dataset and training artifacts
 
+- **Root `models/` (application model/config area):** only `models/segmentation/class_mapping.json` and `models/foreign_matter/class_mapping.json` are present. Registry paths in `configs/models.json` point at missing placeholder `model.pth` files. This is separate from the training scripts under `backend/models/`.
+- **`backend/models/` (newer isolated experiment):** contains `autolabel.py`, `build_dataset.py`, `train_yolo.py`, `predict_count.py`, and `evaluate_counts.py`. These form a YOLO11-seg data/training/inference workflow and are not wired into the main inference module. Its autolabeler generates candidate review annotations and must not be represented as ground truth. The expected prepared `backend/data/yolo/data.yaml` and trained rice checkpoint are absent.
+- **`backend/old models/` (older experiment):** contains Mask R-CNN/YOLO scripts and the experimental `grain_infer.py` implementation. The API currently imports from `backend.models.grain_infer`, so the old-folder copy does not satisfy the import.
+- **`backend/audit_out/` and `backend/audit2_out/` (generated audit outputs):** `audit_out` holds a summary CSV, contact sheet, histograms, six binary masks and six overlays. `audit2_out` holds a summary CSV, six overlays and one specifically named overlay. The work log describes these as first-pass green-key and second-pass lighting-relative area/blob proxy audits. They are not model inference, annotations, or independent validation. Historical `audit2_out` notes refer to 546 photos, while the current raw folder has 860 JPGs; artifact freshness should be checked before reuse.
+
 - `backend/data/raw/`: 860 local JPGs (~4.1 GiB), current local raw image corpus. There is no proof in the repository that each image has correct rice/foreign labels or a fixed number of each object.
 - `backend/data/work/review/coco.json`: 2 image records and 224 polygon annotations across `rice` and `foreign` categories. It is a small review package, not evidence of a finished export or split. Other work files include layout/group CSVs and report CSV.
 - `backend/data/test/` and `backend/data/yolo/` are empty in this checkout.

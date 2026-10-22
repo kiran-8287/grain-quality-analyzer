@@ -10,11 +10,22 @@ venv/
 .venv/
 env/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+coverage/
+*.tsbuildinfo
 
 # Node
 node_modules/
 frontend/dist/
 frontend/build/
+frontend/.vite/
+frontend/coverage/
 .next/
 
 # IDE
@@ -28,6 +39,14 @@ frontend/build/
 .env.local
 backend/.env
 *.env
+
+# Generated local audit outputs (keep the scripts, not their derived images/reports)
+/backend/audit_out/
+/backend/audit2_out/
+/backend/groups_out/
+/rice_count_pipeline/audit_out/
+/rice_count_pipeline/audit2_out/
+/rice_count_pipeline/groups_out/
 
 # Project workflow artifacts
 data/
@@ -45,6 +64,30 @@ progress/
 uploads/
 tmp/
 *.tmp
+
+# Large generated rice-count experiment assets; keep Python source and READMEs
+/rice_count_pipeline/weak_count_experiment/cache/
+/rice_count_pipeline/weak_count_experiment/cache_1536/
+/rice_count_pipeline/weak_count_experiment/dataset/
+/rice_count_pipeline/weak_count_experiment/dataset_1536/
+/rice_count_pipeline/weak_count_experiment/dataset_1536_curated/
+/rice_count_pipeline/weak_count_experiment/predictions/
+/rice_count_pipeline/weak_count_experiment/scale_check/
+/rice_count_pipeline/weak_count_experiment/ultralytics_config/
+/rice_count_pipeline/weak_count_experiment/mpl_cache/
+/rice_count_pipeline/weak_count_experiment/torch_cache/
+/rice_count_pipeline/weak_count_experiment/pseudo_counts.csv
+/rice_count_pipeline/weak_count_experiment/skipped.csv
+/rice_count_pipeline/weak_count_experiment/count_fit_vs_pseudo_labels.csv
+/rice_count_pipeline/weak_count_experiment/runs/
+/rice_count_pipeline/weak_count_experiment/weights/
+
+# Locally generated ML/runtime caches and reports
+*.cache
+*.tfevents.*
+*.engine
+*.tflite
+*.safetensors
 
 # Model artifacts (large binaries)
 *.pth

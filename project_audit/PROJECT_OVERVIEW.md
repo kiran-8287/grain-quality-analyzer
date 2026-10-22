@@ -53,6 +53,7 @@ Generated and dependency trees are summarized rather than expanded. The report d
 │   ├── app/{main.py,api/routes.py,schemas/models.py,services/{job_manager.py,run_logger.py,export.py}}
 │   ├── models/{autolabel.py,build_dataset.py,train_yolo.py,predict_count.py,evaluate_counts.py}
 │   ├── old models/{grain_infer.py,train_yolo.py,train_maskrcnn.py,prepare_data.py,auto_annotate.py,*.md}
+│   ├── audit_out/ and audit2_out/ [generated proxy audit reports and visualizations]
 │   ├── data/{raw/ [860 JPGs],test/ [empty],work/ [review package and reports],yolo/ [empty]}
 │   └── audit outputs, local .venv, and results (generated/ignored)
 ├── configs/{app,inference,models,parameters,thresholds}.json
@@ -73,6 +74,18 @@ Generated and dependency trees are summarized rather than expanded. The report d
 ├── weights/yolo26n.pt and root yolo11n.pt/yolo11s.pt [generic COCO detection]
 └── project_audit/ [this audit]
 ```
+
+### Keep these model/audit directories distinct
+
+| Location | What is there | What it is not |
+|---|---|---|
+| Root `models/` | `segmentation/class_mapping.json` and `foreign_matter/class_mapping.json`; the main app's model/config asset area. `configs/models.json` points to placeholder checkpoints that are absent. | It does not contain the new backend training scripts or an active trained rice checkpoint. |
+| `backend/models/` | Newer isolated YOLO11-seg workflow: `autolabel.py`, `build_dataset.py`, `train_yolo.py`, `predict_count.py`, and `evaluate_counts.py`. | Not automatically imported by the production app; the autolabel output is a heuristic review proxy, not ground truth. No prepared `backend/data/yolo/data.yaml` or trained rice weights are present. |
+| `backend/old models/` | Older experimental Mask R-CNN + YOLO training/inference utilities, including `grain_infer.py`. | Not the `backend.models` Python package path expected by the current experimental API route. |
+| `backend/audit_out/` | Generated first-pass audit artifacts: summary CSV, contact sheet, histograms, six masks and six overlays. | Not model predictions, labels, or production runtime outputs. |
+| `backend/audit2_out/` | Generated second-pass audit artifacts: summary CSV, six overlays and a named photo overlay. | Not an independent accuracy/ground-truth evaluation. Historical work-log run reports 546 photos; current `backend/data/raw/` contains 860, so check artifact recency before reusing. |
+
+The two audit folders are sibling generated output directories under `backend/`, separate from both root `models/` and `backend/models/`. The work log identifies these audits as threshold/blob/area proxy analyses and explicitly cautions that the assumed count calibration is not independent validation.
 
 `backend/data/raw/` contains 860 local JPG files (~4.1 GiB); `backend/data/work/review/coco.json` records 2 images, 224 annotations and categories `rice` and `foreign`. This is not a complete reviewed training set or train/validation/test split. `data/grain/` is empty. Test/validation images are not training data by default. The 860 raw photos' provenance and annotation coverage need confirmation.
 

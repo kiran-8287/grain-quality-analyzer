@@ -49,6 +49,8 @@ Audit date: 2026-10-21. Generated artifacts and dependency trees are summarized 
 | `backend/models/build_dataset.py` | Grouping, COCO review package creation, reviewed dataset conversion. | Existing local modifications; current small review JSON has 2 images only. |
 | `backend/models/train_yolo.py` | Trains YOLO11-seg with configured data YAML and fallback batches. | Needs `backend/data/yolo/data.yaml`; absent. Not run. |
 | `backend/models/predict_count.py`, `evaluate_counts.py` | Tiled mask inference/count/measurement and count evaluation. | No rice checkpoint/eval set; not run. |
+| `backend/models/` (folder as a whole) | Newer isolated YOLO11-seg dataset/autolabel/train/predict/evaluate scripts. | Separate from root `models/`; not called by production app. Candidate autolabels are proxy and need review. |
+| Root `models/` (folder as a whole) | App-side class mapping files; checkpoint paths in registry are placeholders. | Separate from `backend/models/`; no active rice weights. |
 | `backend/old models/grain_infer.py` | Isolated Mask R-CNN + YOLO experimental inference implementation. | File exists under old folder; API expects different module path. |
 | `backend/old models/{train_yolo.py,train_maskrcnn.py,prepare_data.py,auto_annotate.py}` | Older experimental training workflow. | Scripts not part of current API path. |
 | `backend/old models/{GRAIN_INFERENCE.md,GRAIN_TRAINING.md,requirements-ml.txt}` | Experimental setup/usage docs and ML dependencies. | Historical docs; some commands reference missing scripts/paths. |
@@ -77,6 +79,8 @@ Audit date: 2026-10-21. Generated artifacts and dependency trees are summarized 
 | `backend/data/raw/` | Local raw photo corpus. | 860 JPGs, ~4.1 GiB; provenance/labels not established. |
 | `backend/data/work/review/coco.json` | COCO review package. | 2 images, 224 annotations, classes rice/foreign; not full dataset. |
 | `backend/data/work/{report.csv,groups.csv,layout_groups/groups.csv}` | Dataset/audit reports and group information. | 7 total files under `backend/data/work`; read status only, no full audit of CSV semantics. |
+| `backend/audit_out/` | Generated first-pass proxy audit outputs (summary.csv, contact sheet, histograms, six masks and six overlays). | Not predictions/labels or independent validation; separate from model folders. |
+| `backend/audit2_out/` | Generated second-pass proxy audit outputs (summary.csv, six overlays and one named overlay). | Historical log says 546-photo run, current raw corpus is 860; potentially stale and not independent validation. |
 | `backend/data/test/`, `backend/data/yolo/` | Test/prepared YOLO data paths. | Empty. |
 | `raw_images/` | Four local JPGs at repository root. | Local photos; not opened or used for prediction. |
 | `test_images/` | Three validation/demo groups, 256 image files plus generated results/artifacts. | Not used as training data; no ground truth manifest. |
@@ -91,7 +95,7 @@ Audit date: 2026-10-21. Generated artifacts and dependency trees are summarized 
 | `frontend/node_modules/` | 7,334 files, ~113.7 MiB, includes `dist/`. | Build output and installed dependencies; generated. |
 | `.venv/` | Root ML venv. | Python 3.12.4, ML stack, missing web dependencies. |
 | `backend/.venv/` | Python 3.11.9, ~26 GiB including packages. | Web + ML tools; avoid sharing. |
-| `backend/audit_out/`, `backend/audit2_out/` | Generated proxy images/reports. | Worktree untracked; no source changes by this audit. |
+| `backend/audit_out/`, `backend/audit2_out/` | Generated proxy images/reports. | Sibling output folders under `backend/`, separate from root `models/` and `backend/models/`; not model predictions or ground truth. |
 | `backend/results/` | Generated autolabel preview outputs. | Images are proxy labels, not YOLO predictions. |
 | `__pycache__/`, `.pytest_cache/`, `dist/`, `logs/`, `runs/`, `tmp/` | Generated caches/logs/build/model artifacts. | Summarize or omit in external handover; inspect privacy and provenance before sharing. |
 

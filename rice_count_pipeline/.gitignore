@@ -1,0 +1,11 @@
+.venv/
+.cache/
+tmp/
+data/raw/
+data/test/
+data/work/
+data/yolo/
+models/weights/
+runs/
+__pycache__/
+*.py[cod]

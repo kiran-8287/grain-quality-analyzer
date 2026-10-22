@@ -50,6 +50,16 @@ The API call is synchronous from the UI's perspective and the main route runs an
 - Isolated current YOLO11 experiment: `backend/models/{autolabel,build_dataset,train_yolo,predict_count,evaluate_counts}.py`, `backend/README.md`.
 - Older experiment: `backend/old models/` including `grain_infer.py` and training docs; it is not the current import path.
 
+### Model folders vs. audit outputs — keep separate
+
+- **Root `models/`:** current app-side folders, but only class-mapping JSON files are present; registry checkpoint paths are placeholders. No active trained rice checkpoint is stored here.
+- **`backend/models/`:** the newer isolated YOLO11-seg toolchain (`autolabel.py`, `build_dataset.py`, `train_yolo.py`, `predict_count.py`, `evaluate_counts.py`). It is training/data tooling, not the production runtime. Autolabels are candidate proxy labels for human review; the prepared YOLO dataset config and trained rice weights are absent.
+- **`backend/old models/`:** the earlier Mask R-CNN/YOLO experiment. Its `grain_infer.py` is where the similar experimental runtime file actually sits, but the route imports `backend.models.grain_infer`; the path mismatch is why that module is missing to Python.
+- **`backend/audit_out/`:** generated first-pass proxy audit artifacts (CSV, contact sheet, histograms, masks and overlays).
+- **`backend/audit2_out/`:** generated second-pass proxy audit artifacts (CSV and overlays). The historical run reports 546 photos; the current `backend/data/raw/` count is 860, so treat these outputs as potentially stale. Neither audit directory contains trained model weights or model accuracy evidence.
+
+Both audit folders are sibling output directories under `backend/`; neither is a subfolder of root `models/` or `backend/models/`.
+
 ## Segmentation, rice gate and measurement facts
 
 `rice_gate.py` independently evaluates whether image objects resemble rice. It uses the shared Otsu/polarity foreground mask, object-level color/shape/size features and configured rice class mapping. Current mapping says class 1 `rice_grain`; no trained application checkpoint establishes an ML class. Hard-negative foreign objects must remain non-rice.
