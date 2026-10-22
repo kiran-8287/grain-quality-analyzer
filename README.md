@@ -45,10 +45,13 @@ A:\grain\
 │   ├── models.json
 │   ├── parameters.json
 │   └── thresholds.json
-├── data/                     # Data and audit files (ignored)
-│   ├── audit/
-│   ├── runs/
-│   └── datasets/
+├── data/                     # Shared data root (ignored)
+│   ├── runs/                 # Application run artifacts
+│   └── rice_count/           # Shared rice-count photos, work files, and datasets
+│       ├── raw/
+│       ├── test/
+│       ├── work/
+│       └── datasets/
 ├── docs/                     # Documentation
 ├── frontend/                 # React + Vite frontend
 │   ├── src/
@@ -125,6 +128,10 @@ npm run dev:frontend
 ```bash
 npm run build
 ```
+
+## Rice-count experiments
+
+The separate experimental workflows are consolidated under [`rice_count_pipeline/`](rice_count_pipeline/README.md). Their common photos and generated datasets live under `data/rice_count/` so each method uses the same source files. The app's production inference remains the classical-CV pipeline described above.
 
 ## Backend
 

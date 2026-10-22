@@ -13,6 +13,7 @@ from ultralytics import YOLO
 
 from predict_count import count_image
 
+DATA_HOME = ROOT.parent / "data" / "rice_count"
 COUNT_RE = re.compile(r"_r(\d+)_f(\d+)_", re.IGNORECASE)
 
 
@@ -22,7 +23,7 @@ def main():
     ap.add_argument("--tile", type=int)
     ap.add_argument("--overlap", type=float, default=0.2)
     args = ap.parse_args()
-    test_dir = ROOT / "data" / "test"
+    test_dir = DATA_HOME / "test"
     paths = sorted(p for p in test_dir.rglob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
     if not paths: raise SystemExit(f"No test photos in {test_dir}")
     rows = []
@@ -41,7 +42,7 @@ def main():
                      "foreign_signed_error": pf - tf})
         print(f"{path.name}: rice {pr}/{tr}, foreign {pf}/{tf}")
     if not rows: raise SystemExit("No filenames matched the true-count pattern")
-    work = ROOT / "data" / "work"; work.mkdir(parents=True, exist_ok=True)
+    work = ROOT / "methods" / "yolo_segmentation" / "results"; work.mkdir(parents=True, exist_ok=True)
     with (work / "eval_counts.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys()); writer.writeheader(); writer.writerows(rows)
     for cls in ("rice", "foreign"):
@@ -60,7 +61,8 @@ def main():
     plt.plot([0, lim], [0, lim], "k--"); plt.xlabel("True rice count"); plt.ylabel("Predicted rice count")
     plt.tight_layout(); plt.savefig(work / "counts_scatter.png", dpi=160); plt.close()
     model = YOLO(str(args.weights))
-    metrics = model.val(data=str(ROOT / "data" / "yolo" / "data.yaml"), imgsz=1280, max_det=2000)
+    dataset = DATA_HOME / "datasets" / "yolo_segmentation" / "data.yaml"
+    metrics = model.val(data=str(dataset), imgsz=1280, max_det=2000)
     names = model.names
     for i, name in names.items():
         def class_ap(metric):

@@ -21,8 +21,8 @@ Idea used here
 v2.1 additions: per-photo grain size, per-folder summary, worst-photo list, --show.
 
 Usage
-  python audit_photos_v2.py "A:/grain/backend/data/raw" --out audit2_out
-  python audit_photos_v2.py "A:/grain/backend/data/raw" --out audit2_out --show IMG20261020212111
+  python tools/audit_photos_v2.py data/rice_count/raw --out data/rice_count/work/audit
+  python tools/audit_photos_v2.py data/rice_count/raw --out data/rice_count/work/audit --show IMG20261020212111
 """
 import argparse
 import csv

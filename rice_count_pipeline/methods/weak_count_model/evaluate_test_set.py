@@ -6,7 +6,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PROJECT = ROOT.parent
+PROJECT = ROOT.parent.parent
+DATA_HOME = PROJECT.parent / "data" / "rice_count"
 os.environ.setdefault("YOLO_CONFIG_DIR", str(ROOT / "ultralytics_config"))
 os.environ.setdefault("TORCH_HOME", str(ROOT / "torch_cache"))
 os.environ.setdefault("MPLCONFIGDIR", str(ROOT / "mpl_cache"))
@@ -62,7 +63,7 @@ def save_mask_overlay(path, result, target, rice_count, foreign_count,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=Path, default=PROJECT / "data" / "test")
+    parser.add_argument("--source", type=Path, default=DATA_HOME / "test")
     parser.add_argument("--weights", type=Path, default=WEIGHTS)
     parser.add_argument("--imgsz", type=int, default=1024)
     args = parser.parse_args()

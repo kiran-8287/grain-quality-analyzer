@@ -7,8 +7,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PROJECT = ROOT.parent
-sys.path.insert(0, str(PROJECT / "models"))
+PROJECT = ROOT.parent.parent
+DATA_HOME = PROJECT.parent / "data" / "rice_count"
+sys.path.insert(0, str(ROOT))
 from area_count import CALIBRATION, count_image  # noqa: E402
 
 import cv2
@@ -27,9 +28,9 @@ def expected_counts(path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=Path, default=PROJECT / "data" / "test")
+    parser.add_argument("--source", type=Path, default=DATA_HOME / "test")
     parser.add_argument("--calibration", type=Path, default=CALIBRATION)
-    parser.add_argument("--out", type=Path, default=ROOT / "predictions" / "test_set" / "area")
+    parser.add_argument("--out", type=Path, default=ROOT / "results" / "test_set")
     args = parser.parse_args()
     if not args.calibration.is_file():
         raise SystemExit(f"Missing area calibration: {args.calibration}")

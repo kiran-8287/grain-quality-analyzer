@@ -9,12 +9,14 @@ from types import SimpleNamespace
 
 import cv2
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+METHOD = Path(__file__).resolve().parent
+ROOT = METHOD.parent.parent
+DATA_HOME = ROOT.parent / "data" / "rice_count"
+sys.path.insert(0, str(ROOT / "tools"))
 from audit_photos_v2 import blob_areas, load_small, lone_grain_area, masks  # noqa: E402
 
-CALIBRATION = ROOT / "data" / "work" / "area_calibration.json"
-OUT = ROOT / "data" / "work" / "results"
+CALIBRATION = METHOD / "results" / "area_calibration.json"
+OUT = METHOD / "results" / "predictions"
 
 
 def calibrate(summary, out, expected_rice=100, expected_foreign=10, clump_grains=8):
@@ -82,7 +84,7 @@ def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     fit = commands.add_parser("calibrate", help="derive an assumed-count calibration from audit CSV")
-    fit.add_argument("--summary", type=Path, default=ROOT / "data" / "work" / "audit" / "summary.csv")
+    fit.add_argument("--summary", type=Path, default=DATA_HOME / "work" / "audit" / "summary.csv")
     fit.add_argument("--out", type=Path, default=CALIBRATION)
     fit.add_argument("--expected-rice", type=int, default=100)
     fit.add_argument("--expected-foreign", type=int, default=10)

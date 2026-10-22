@@ -1,4 +1,4 @@
-# Flatten the raw image sub-folders into data/raw, rename 1..N, then remove the folders.
+# Flatten the raw image sub-folders into data/rice_count/raw, rename 1..N, then remove the folders.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/organize_raw_images.ps1
 #
@@ -6,7 +6,7 @@
 # recoverable after the numeric rename.
 
 param(
-    [string]$RawDir = "A:\grain\backend\data\raw",
+    [string]$RawDir = "A:\grain\data\rice_count\raw",
     [string[]]$Folders = @("Rice grains - 100", "Rice grains - 100 2"),
     [string]$ManifestPath = ""
 )

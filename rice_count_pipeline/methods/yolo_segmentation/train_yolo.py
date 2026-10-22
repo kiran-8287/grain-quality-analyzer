@@ -9,6 +9,7 @@ except ImportError:
 import torch
 from ultralytics import YOLO
 
+DATA_HOME = ROOT.parent / "data" / "rice_count"
 
 
 def main():
@@ -16,7 +17,7 @@ def main():
     ap.add_argument("--name", required=True)
     ap.add_argument("--model", default="yolo11s-seg.pt")
     args = ap.parse_args()
-    data = ROOT / "data" / "yolo" / "data.yaml"
+    data = DATA_HOME / "datasets" / "yolo_segmentation" / "data.yaml"
     if not data.is_file():
         raise SystemExit(f"Missing dataset config: {data}; run build_dataset.py --source reviewed first")
     plans = [(4, 1280), (2, 1280), (2, 1024)]
@@ -28,14 +29,15 @@ def main():
                         cos_lr=True, amp=True, workers=2, close_mosaic=15, mosaic=1.0,
                         degrees=90, flipud=0.5, fliplr=0.5, scale=0.4, translate=0.1,
                         hsv_h=0.01, hsv_s=0.4, hsv_v=0.4, copy_paste=0.2, mixup=0,
-                        overlap_mask=True, max_det=1000, seed=0, project=str(ROOT / "runs"),
+                        overlap_mask=True, max_det=1000, seed=0,
+                        project=str(ROOT / "methods" / "yolo_segmentation" / "runs"),
                         name=args.name, exist_ok=True)
             metrics = model.val(data=str(data), imgsz=imgsz, split="val", max_det=2000)
             print(f"val mask mAP50={metrics.seg.map50:.4f}")
             for i, score in enumerate(metrics.seg.ap50):
                 print(f"class {i} mask mAP50={score:.4f}")
             best = Path(model.trainer.best)
-            dest = ROOT / "models" / "weights" / f"{args.name}.pt"
+            dest = ROOT / "methods" / "yolo_segmentation" / "weights" / f"{args.name}.pt"
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(best, dest)
             print(f"weights: {dest}")

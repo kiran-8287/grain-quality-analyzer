@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PROJECT = ROOT.parent
-WORKSPACE = PROJECT.parent
-sys.path.insert(0, str(WORKSPACE / "backend" / "models"))
+PROJECT = ROOT.parent.parent
+DATA_HOME = PROJECT.parent / "data" / "rice_count"
+sys.path.insert(0, str(ROOT))
 from autolabel import label_image  # noqa: E402
 
 import cv2
@@ -31,9 +31,8 @@ def expected_counts(path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=Path, default=PROJECT / "data" / "test")
-    parser.add_argument("--out", type=Path,
-                        default=ROOT / "predictions" / "test_set" / "autolabel_proxy")
+    parser.add_argument("--source", type=Path, default=DATA_HOME / "test")
+    parser.add_argument("--out", type=Path, default=ROOT / "results" / "test_set")
     args = parser.parse_args()
     paths = sorted(p for p in args.source.iterdir()
                    if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES)

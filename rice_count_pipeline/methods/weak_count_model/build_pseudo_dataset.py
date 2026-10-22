@@ -2,8 +2,8 @@
 import argparse
 import csv
 import json
+import os
 import random
-import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -13,11 +13,13 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
-PROJECT = ROOT.parent
-RAW = PROJECT / "data" / "raw"
-GROUPS = PROJECT / "data" / "work" / "layout_groups" / "groups.csv"
-DATASET = ROOT / "dataset_1536_curated"
-CACHE = ROOT / "cache_1536"
+PROJECT = ROOT.parent.parent
+DATA_HOME = PROJECT.parent / "data" / "rice_count"
+RAW = DATA_HOME / "raw"
+GROUPS = DATA_HOME / "work" / "layout_groups" / "groups.csv"
+DATASET = DATA_HOME / "datasets" / "weak_count_model"
+CACHE = DATA_HOME / "work" / "weak_count_model" / "label_cache"
+LABEL_INPUTS = DATA_HOME / "work" / "weak_count_model" / "label_inputs"
 SEED = 0
 LONG_SIDE = 1536
 MIN_AREA = 56
@@ -32,7 +34,7 @@ def natural_key(path):
 
 
 def instances_to_polygons(path):
-    sys.path.insert(0, str(PROJECT / "models"))
+    sys.path.insert(0, str(PROJECT / "methods" / "autolabel_proxy"))
     from autolabel import label_image
     from threadpoolctl import threadpool_limits
     with threadpool_limits(limits=1):
@@ -57,7 +59,7 @@ def worker(image, output):
 
 
 def get_labels(path):
-    target = CACHE / f"{path.stem}.json"
+    target = CACHE / f"{Path(path).stem}.json"
     if target.is_file():
         return json.loads(target.read_text(encoding="utf-8"))
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -80,18 +82,6 @@ def prepare_one(path, group_id):
             counts[cls] += 1
         return {"file": path.name, "group_id": group_id, "split": split,
                 "pseudo_rice": counts[0], "pseudo_foreign": counts[1]}
-    cached_image = ROOT / "dataset_1536" / "images" / split / path.name
-    cached_label = ROOT / "dataset_1536" / "labels" / split / f"{path.stem}.txt"
-    if cached_image.is_file() and cached_label.is_file():
-        shutil.copy2(cached_image, image_dst)
-        shutil.copy2(cached_label, label_dst)
-        counts = [0, 0]
-        for line in cached_label.read_text(encoding="utf-8").splitlines():
-            counts[int(line.split(maxsplit=1)[0])] += 1
-        return {"file": path.name, "group_id": group_id, "split": split,
-                "pseudo_rice": counts[0], "pseudo_foreign": counts[1]}
-    if (ROOT / "dataset_1536" / "data.yaml").is_file():
-        raise ValueError("not produced by the completed initial pseudo-label pass")
     original = cv2.imread(str(path))
     if original is None:
         raise ValueError("image could not be decoded")
@@ -99,11 +89,16 @@ def prepare_one(path, group_id):
     scale = min(1.0, LONG_SIDE / max(h0, w0))
     image = (cv2.resize(original, (round(w0 * scale), round(h0 * scale)),
                         interpolation=cv2.INTER_AREA) if scale < 1 else original)
-    label_input = CACHE / "images" / f"{path.stem}.png"
+    label_input = LABEL_INPUTS / f"{path.stem}.png"
     label_input.parent.mkdir(parents=True, exist_ok=True)
-    if not label_input.is_file() and not cv2.imwrite(str(label_input), image):
-        raise OSError(f"Could not write scaled label input: {label_input}")
-    objects = get_labels(label_input)
+    objects = get_labels(label_input) if (CACHE / f"{path.stem}.json").is_file() else None
+    if objects is None:
+        if not cv2.imwrite(str(label_input), image):
+            raise OSError(f"Could not write scaled label input: {label_input}")
+        try:
+            objects = get_labels(label_input)
+        finally:
+            label_input.unlink(missing_ok=True)
     if not objects:
         raise ValueError("pseudo-labeler returned no polygons")
     h, w = image.shape[:2]
@@ -119,8 +114,8 @@ def prepare_one(path, group_id):
     if not lines:
         raise ValueError("no valid polygons after conversion")
     if not image_dst.exists():
-        if not cv2.imwrite(str(image_dst), image):
-            raise OSError(f"Could not write resized training image: {image_dst}")
+        # Keep one photo payload; YOLO resizes it, and polygon coordinates are normalized.
+        os.link(path, image_dst)
     label_dst.write_text("\n".join(lines), encoding="utf-8")
     return {"file": path.name, "group_id": group_id, "split": split,
             "pseudo_rice": counts[0], "pseudo_foreign": counts[1]}

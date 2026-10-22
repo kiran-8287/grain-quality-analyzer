@@ -2,8 +2,8 @@
 import argparse
 import csv
 import json
+import os
 import random
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +11,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = ROOT.parent
+DATA_HOME = ROOT.parent / "data" / "rice_count"
 SEED = 0
 MIN_AREA = 400
 
@@ -23,7 +25,7 @@ def read_csv(path):
 
 def source_path(name):
     path = Path(name)
-    return path if path.is_absolute() else (ROOT / path).resolve()
+    return path if path.is_absolute() else (REPO_ROOT / path).resolve()
 
 
 def polygon_from_mask(mask):
@@ -41,10 +43,8 @@ def polygon_from_mask(mask):
 
 def label_polygons(path):
     """Run heavy full-resolution mask work in a disposable Windows worker."""
-    try:
-        from .autolabel import label_image
-    except ImportError:
-        from autolabel import label_image
+    sys.path.insert(0, str(ROOT))
+    from methods.autolabel_proxy.autolabel import label_image
     source = Path(path)
     from threadpoolctl import threadpool_limits
     with threadpool_limits(limits=1):
@@ -66,13 +66,13 @@ def run_label_worker(path, cache_file):
 
 
 def get_selection(expected_rice, expected_foreign, tol):
-    audit = ROOT / "data" / "work" / "audit" / "summary.csv"
-    groups = ROOT / "data" / "work" / "layout_groups" / "groups.csv"
+    audit = DATA_HOME / "work" / "audit" / "summary.csv"
+    groups = DATA_HOME / "work" / "layout_groups" / "groups.csv"
     if not audit.is_file() or not groups.is_file():
         raise SystemExit("Run audit_photos_v2.py and find_layout_groups.py first.")
     audits = {Path(r["file"]).name: r for r in read_csv(audit)}
     group_rows = {Path(r["file"]).name: r for r in read_csv(groups)}
-    paths = sorted(p for p in (ROOT / "data" / "raw").rglob("*")
+    paths = sorted(p for p in (DATA_HOME / "raw").rglob("*")
                    if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
     missing = [p.name for p in paths if p.name not in audits or p.name not in group_rows]
     if missing or len(audits) != len(paths) or len(group_rows) != len(paths):
@@ -100,7 +100,7 @@ def get_selection(expected_rice, expected_foreign, tol):
                                        -int(pr[1]["lone_grains"]), pr[0].name))
         selected[gid] = candidates[0]
 
-    work = ROOT / "data" / "work"
+    work = DATA_HOME / "work"
     out = work / "round1_selection.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="", encoding="utf-8") as f:
@@ -111,7 +111,7 @@ def get_selection(expected_rice, expected_foreign, tol):
         for gid, members in sorted(by_group.items()):
             for path, row in members:
                 chosen = selected.get(gid, (None,))[0] == path
-                writer.writerow({"file": str(path.relative_to(ROOT)).replace("\\", "/"),
+                writer.writerow({"file": str(path.relative_to(REPO_ROOT)).replace("\\", "/"),
                                  "group_id": gid, "group_size": len(members),
                                  "split": "val" if gid in val_ids else "train",
                                  "selected": int(chosen), "status": row["status"],
@@ -128,7 +128,7 @@ def get_selection(expected_rice, expected_foreign, tol):
             nr, nf = round(float(row["rice_est"])), int(row["stones"])
             needs_review = nf != expected_foreign or abs(nr - expected_rice) > tol
             flagged += needs_review
-            writer.writerow({"photo": str(path.relative_to(ROOT)).replace("\\", "/"),
+            writer.writerow({"photo": str(path.relative_to(REPO_ROOT)).replace("\\", "/"),
                              "n_rice": nr, "n_foreign": nf,
                              "estimate_type": "area_proxy_not_instance_count",
                              "needs_review": int(needs_review)})
@@ -137,7 +137,7 @@ def get_selection(expected_rice, expected_foreign, tol):
 
 
 def write_classical(selected, val_ids, overlays):
-    review = ROOT / "data" / "work" / "review"
+    review = DATA_HOME / "work" / "review"
     images_dir = review / "images"
     if review.exists() and (review / "coco.json").exists():
         raise SystemExit(f"Refusing to overwrite existing review package: {review / 'coco.json'}")
@@ -148,12 +148,12 @@ def write_classical(selected, val_ids, overlays):
     rng = random.Random(SEED)
     gid_order = sorted(selected, key=lambda g: (int(g) if g.isdigit() else g))
     overlay_gids = set(rng.sample(gid_order, min(overlays * 4, len(gid_order)))) if overlays else set()
-    overlay_dir = ROOT / "data" / "work" / "overlays"
+    overlay_dir = DATA_HOME / "work" / "overlays"
     tile_dir = overlay_dir / "_tiles"
     if overlays:
         tile_dir.mkdir(parents=True, exist_ok=True)
     ann_id = 1
-    label_cache = ROOT / "data" / "work" / "label_cache"
+    label_cache = DATA_HOME / "work" / "label_cache"
     label_cache.mkdir(parents=True, exist_ok=True)
     label_errors = []
     for image_id, gid in enumerate(gid_order, 1):
@@ -170,7 +170,8 @@ def write_classical(selected, val_ids, overlays):
                 raise RuntimeError(f"Could not read {path}")
             filename = path.name
             target = images_dir / filename
-            shutil.copy2(path, target)
+            if not target.exists():
+                os.link(path, target)
             h, w = image.shape[:2]
             coco["images"].append({"id": image_id, "file_name": f"images/{filename}",
                                    "width": w, "height": h})
@@ -243,13 +244,13 @@ def reviewed_exports(folder):
 
 
 def write_yolo(selected, val_ids):
-    review = ROOT / "data" / "work" / "reviewed"
+    review = DATA_HOME / "work" / "reviewed"
     exports = reviewed_exports(review)
     selected_by_name = {path.name: (gid, path) for gid, (path, _) in selected.items()}
     missing = sorted(set(selected_by_name) - set(exports))
     if missing:
         raise SystemExit(f"Reviewed COCO export is missing {len(missing)} selected images, e.g. {missing[:5]}")
-    output = ROOT / "data" / "yolo"
+    output = DATA_HOME / "datasets" / "yolo_segmentation"
     if output.exists() and any(output.iterdir()):
         raise SystemExit(f"Refusing to replace existing YOLO dataset directory: {output}")
     for split in ("train", "val"):
@@ -266,8 +267,12 @@ def write_yolo(selected, val_ids):
         if image is None:
             raise SystemExit(f"Could not load reviewed image {image_path}")
         h, w = image.shape[:2]
+        source_image = cv2.imread(str(source))
+        if source_image is None or source_image.shape[:2] != (h, w):
+            raise SystemExit(f"Reviewed image dimensions differ from source photo: {name}")
         target = output / "images" / split / name
-        shutil.copy2(image_path, target)
+        if not target.exists():
+            os.link(source, target)
         lines = []
         for ann in anns:
             label = categories.get(int(ann["category_id"]), "")

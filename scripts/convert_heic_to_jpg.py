@@ -30,7 +30,7 @@ def convert_one(src: Path) -> Path:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--raw-dir", default=r"A:\grain\backend\data\raw")
+    ap.add_argument("--raw-dir", default=r"A:\grain\data\rice_count\raw")
     ap.add_argument("--keep-heic", action="store_true", help="keep the original .heic files")
     args = ap.parse_args()
 

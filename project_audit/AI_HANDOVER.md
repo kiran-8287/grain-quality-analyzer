@@ -2,6 +2,10 @@
 
 **Audit snapshot:** 2026-10-21, workspace `A:\grain`. This briefing is self-contained, based on files actually inspected and commands actually run. The current checkout is authoritative; prior work-log entries and older docs conflict with it.
 
+## Post-audit workspace update — 2026-10-23
+
+The rice-count experiments are organized under `rice_count_pipeline/`, with shared source photos and datasets in the repository-level `data/rice_count/` folder. Separate method code remains in `rice_count_pipeline/methods/{autolabel_proxy,area_count,weak_count_model,yolo_segmentation}`. The single proxy implementation is `methods/autolabel_proxy/autolabel.py`; `backend/models/autolabel.py` is only a compatibility import. This remains an isolated experiment and does not activate YOLO in production. See `progress/WORK_LOG.md` for cleanup history.
+
 ## What the project does
 
 It is a React/TypeScript + Vite frontend and a FastAPI/Python service for image-based rice-grain segmentation, geometry, and Whole/Broken estimation. The primary UI uploads or captures an image, posts it to `/api/analyze`, and renders the returned annotated JPEG, grain details, summary, warnings and CSV/JSON download controls. The main production path in the current checkout is classical CV because no matching rice model checkpoint is configured/present.
