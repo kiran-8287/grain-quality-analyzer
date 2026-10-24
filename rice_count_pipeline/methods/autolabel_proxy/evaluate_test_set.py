@@ -1,9 +1,10 @@
-"""Evaluate the unchanged backend HSV/KMeans auto-labeler on count-labeled photos."""
+"""Evaluate the locally normalized Lab/KMeans proxy on count-labeled photos."""
 import argparse
 import csv
 import re
 import sys
 import time
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -19,6 +20,8 @@ from threadpoolctl import threadpool_limits
 NAME_COUNTS = re.compile(r"(\d+)\s*whole\s*,?\s*(\d+)\s*broken\s*,?\s*(\d+)\s*stones", re.I)
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 LONG_SIDE = 1536
+MIN_RICE_AREA = 200
+MIN_FOREIGN_AREA = 700
 
 
 def expected_counts(path):
@@ -57,14 +60,19 @@ def main():
             color = (255, 0, 255) if cls == "rice" else (0, 0, 255)
             contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL,
                                            cv2.CHAIN_APPROX_SIMPLE)
-            if scale < 1:
-                contours = [np.round(c.astype(np.float32) * scale).astype(np.int32)
-                            for c in contours]
             cv2.drawContours(vis, contours, -1, color, 2, cv2.LINE_AA)
 
         start = time.perf_counter()
-        with threadpool_limits(limits=1):
-            _, _, ref_area = label_image(path, instance_callback=draw_instance)
+        temp_root = DATA_HOME / "work" / "runtime_cache" / "autolabel_inputs"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="proxy_", dir=temp_root) as temp_dir:
+            label_path = Path(temp_dir) / path.name
+            if not cv2.imwrite(str(label_path), vis):
+                raise OSError(f"Could not write scaled proxy input: {label_path}")
+            with threadpool_limits(limits=1):
+                _, _, ref_area = label_image(
+                    label_path, min_area=MIN_RICE_AREA, min_foreign_area=MIN_FOREIGN_AREA,
+                    instance_callback=draw_instance, max_split_clusters=50)
         rice, foreign = counts["rice"], counts["foreign"]
         total = rice + foreign
         rice_pct = 100 * rice / total if total else 0.0
