@@ -1,0 +1,21 @@
+﻿image,actual_rice,actual_foreign,fresh_predicted_rice,fresh_predicted_foreign,fresh_foreign_absolute_error,original_rice_share_percent,fresh_rice_share_percent
+"115 whole, 15 broken , 15 stones(1).jpg",130,15,129,15,0,89.6552,89.5833
+"115 whole, 15 broken , 15 stones(2).jpg",130,15,126,15,0,89.6552,89.3617
+"115 whole, 15 broken , 15 stones(3).jpg",130,15,130,16,1,89.6552,89.0411
+"115 whole, 15 broken , 15 stones.jpg",130,15,126,15,0,89.6552,89.3617
+"135 whole , 15 broken , 15 stones(1).jpg",150,15,147,14,1,90.9091,91.3043
+"135 whole , 15 broken , 15 stones(2).jpg",150,15,147,14,1,90.9091,91.3043
+"135 whole , 15 broken , 15 stones(3).jpg",150,15,143,15,0,90.9091,90.5063
+"135 whole , 15 broken , 15 stones.jpg",150,15,143,15,0,90.9091,90.5063
+"185 whole, 15 broken, 10 stones(1).jpg",200,10,201,10,0,95.2381,95.2607
+"185 whole, 15 broken, 10 stones(2).jpg",200,10,201,10,0,95.2381,95.2607
+"185 whole, 15 broken, 10 stones(3).jpg",200,10,187,11,1,95.2381,94.4444
+"185 whole, 15 broken, 10 stones.jpg",200,10,187,11,1,95.2381,94.4444
+"185 whole, 15 broken, 20 stones(1).jpg",200,20,193,19,1,90.9091,91.0377
+"185 whole, 15 broken, 20 stones(2).jpg",200,20,202,20,0,90.9091,90.991
+"185 whole, 15 broken, 20 stones(3).jpg",200,20,194,19,1,90.9091,91.0798
+"185 whole, 15 broken, 20 stones.jpg",200,20,200,20,0,90.9091,90.9091
+"235 whole, 15 broken , 20 stones(1).jpg",250,20,242,19,1,92.5926,92.7203
+"235 whole, 15 broken , 20 stones(2).jpg",250,20,222,19,1,92.5926,92.1162
+"235 whole, 15 broken , 20 stones(3).jpg",250,20,242,19,1,92.5926,92.7203
+"235 whole, 15 broken , 20 stones.jpg",250,20,225,19,1,92.5926,92.2131

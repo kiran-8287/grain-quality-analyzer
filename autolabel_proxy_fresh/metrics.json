@@ -1,0 +1,15 @@
+{
+  "images": 20,
+  "rice_exact_count_images": 2,
+  "rice_exact_count_rate_percent": 10.0,
+  "foreign_exact_count_images": 9,
+  "foreign_exact_count_rate_percent": 45.0,
+  "both_classes_exact_images": 1,
+  "both_classes_exact_rate_percent": 5.0,
+  "rice_mean_absolute_error_grains_per_image": 7.05,
+  "foreign_mean_absolute_error_items_per_image": 0.55,
+  "aggregate_count_accuracy_percent": 96.23762376237623,
+  "aggregate_absolute_count_error": 152,
+  "aggregate_actual_count": 4040,
+  "accuracy_definition": "100 * (1 - sum of absolute rice and foreign count errors / sum of actual rice and foreign counts); also report exact-count rates and MAE."
+}

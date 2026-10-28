@@ -1,0 +1,131 @@
+{
+  "dataset": "A:\\grain\\data\\rice_count\\raw",
+  "images_evaluated": 860,
+  "images_failed": 0,
+  "reference_source": "User-provided fixed reference: 100 rice grains + 10 foreign-matter objects per image.",
+  "fresh_proxy_processing": "rice_labeler.py at its current 0.40 linear image scale; min_area scaled by 0.40^2.",
+  "rice": {
+    "reference_count_per_image": 100,
+    "predicted_mean": 106.68372093023255,
+    "predicted_sd_sample": 16.511468906894883,
+    "predicted_median": 100.0,
+    "predicted_min": 93,
+    "predicted_max": 255,
+    "absolute_error_p90": 23.0,
+    "absolute_error_p95": 34.0,
+    "absolute_error_p99": 76.04999999999984,
+    "absolute_error_max": 155,
+    "overcount_images": 418,
+    "undercount_images": 248,
+    "zero_bias_images": 194,
+    "signed_bias_mean": 6.683720930232558,
+    "signed_bias_bootstrap_95ci": [
+      5.598779069767442,
+      7.80593023255814
+    ],
+    "mae": 7.593023255813954,
+    "mae_bootstrap_95ci": [
+      6.5709011627906975,
+      8.698924418604651
+    ],
+    "rmse": 17.80403664707059,
+    "median_absolute_error": 1.0,
+    "mape_percent": 7.5930232558139545,
+    "wape_percent": 7.593023255813954,
+    "count_accuracy_percent": 92.40697674418604,
+    "absolute_error_total": 6530,
+    "exact_images": 194,
+    "exact_rate_percent": 22.558139534883722,
+    "exact_rate_wilson_95ci_percent": [
+      19.890286077141027,
+      25.47005809476655
+    ],
+    "within_1_images": 438,
+    "within_1_rate_percent": 50.93023255813954,
+    "within_1_wilson_95ci_percent": [
+      47.592398025805075,
+      54.25979369718112
+    ],
+    "practical_tolerance_count": 5,
+    "within_tolerance_images": 627,
+    "within_tolerance_rate_percent": 72.90697674418605,
+    "within_tolerance_wilson_95ci_percent": [
+      69.83959152692904,
+      75.77062965160573
+    ]
+  },
+  "foreign": {
+    "reference_count_per_image": 10,
+    "predicted_mean": 9.938372093023256,
+    "predicted_sd_sample": 0.7283816568961051,
+    "predicted_median": 10.0,
+    "predicted_min": 6,
+    "predicted_max": 13,
+    "absolute_error_p90": 1.0,
+    "absolute_error_p95": 1.0,
+    "absolute_error_p99": 2.0,
+    "absolute_error_max": 4,
+    "overcount_images": 154,
+    "undercount_images": 187,
+    "zero_bias_images": 519,
+    "signed_bias_mean": -0.06162790697674419,
+    "signed_bias_bootstrap_95ci": [
+      -0.11046511627906977,
+      -0.012790697674418604
+    ],
+    "mae": 0.43372093023255814,
+    "mae_bootstrap_95ci": [
+      0.3953488372093023,
+      0.47325581395348837
+    ],
+    "rmse": 0.7305620645999614,
+    "median_absolute_error": 0.0,
+    "mape_percent": 4.337209302325581,
+    "wape_percent": 4.337209302325581,
+    "count_accuracy_percent": 95.66279069767441,
+    "absolute_error_total": 373,
+    "exact_images": 519,
+    "exact_rate_percent": 60.348837209302324,
+    "exact_rate_wilson_95ci_percent": [
+      57.040420269991365,
+      63.56521264822994
+    ],
+    "within_1_images": 837,
+    "within_1_rate_percent": 97.32558139534883,
+    "within_1_wilson_95ci_percent": [
+      96.01886763657811,
+      98.211386270344
+    ],
+    "practical_tolerance_count": 1,
+    "within_tolerance_images": 837,
+    "within_tolerance_rate_percent": 97.32558139534883,
+    "within_tolerance_wilson_95ci_percent": [
+      96.01886763657811,
+      98.211386270344
+    ]
+  },
+  "both_classes_exact_images": 135,
+  "both_classes_exact_rate_percent": 15.69767441860465,
+  "both_classes_exact_wilson_95ci_percent": [
+    13.419548423968465,
+    18.28088179091601
+  ],
+  "both_classes_within_1_each_images": 436,
+  "both_classes_within_1_each_rate_percent": 50.69767441860465,
+  "combined_absolute_error_total": 6903,
+  "combined_actual_count_total": 94600,
+  "combined_count_accuracy_percent": 92.7029598308668,
+  "mean_rice_share_absolute_error_percentage_points": 0.6421278369348271,
+  "mean_rice_share_signed_bias_percentage_points": 0.4550891409148707,
+  "rice_share_original_percent": 90.9090909090909,
+  "rice_share_fresh_mean_percent": 91.36418005000577,
+  "rice_share_fresh_sd_percentage_points": 1.0023964737263649,
+  "runtime_mean_seconds_per_image": 1.4283441860465116,
+  "runtime_median_seconds_per_image": 0.958,
+  "limitations": [
+    "Evaluation uses fixed user-provided counts, not image-specific reviewed annotations.",
+    "Raw folder is training data; this is an in-sample count-agreement audit, not independent validation/generalization.",
+    "No instance-level ground-truth masks are available, so object precision, recall, F1, and IoU are not measurable.",
+    "Confidence intervals treat images as independent; repeated capture/layout correlations may make them optimistic."
+  ]
+}
