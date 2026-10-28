@@ -344,7 +344,7 @@ def merge_pieces(L, g, ok=SINGLE_OK, crumb=0.30):
 # --------------------------------------------------------------------------- #
 
 def label_image(path, min_area=400, instance_callback=None, max_split_clusters=None,
-                seed=0, use_seams=True, merge=True):
+                seed=0, use_seams=True, merge=True, return_details=False):
     im = cv2.imread(str(path))
     if im is None:
         raise ValueError(f'Could not read image: {path}')
@@ -418,6 +418,8 @@ def label_image(path, min_area=400, instance_callback=None, max_split_clusters=N
                 continue
             full = np.zeros(cc.shape, bool); full[y:y + h, x:x + w] = piece
             emit(full, 'rice')
+    if return_details:
+        return im, inst, g.area, g.length
     return im, inst, g.area
 
 

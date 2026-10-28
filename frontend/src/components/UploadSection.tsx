@@ -1,30 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Image as ImageIcon, CheckCircle2, FileUp, Camera, CameraOff, RefreshCw, X, SlidersHorizontal } from 'lucide-react';
-
-export interface ReferenceProfileOption {
-  /** Form value sent to the API. Empty string means "no explicit profile". */
-  id: string;
-  label: string;
-  detail: string;
-}
+import { Upload, FileUp, Camera, CameraOff, RefreshCw, X } from 'lucide-react';
 
 interface UploadSectionProps {
   onAnalyze: (file: File) => void;
   isLoading: boolean;
-  selectedProfile: string | null;
-  onProfileChange: (profileId: string | null) => void;
-  profileOptions: ReferenceProfileOption[];
 }
 
 type CameraState = 'idle' | 'requesting' | 'active' | 'captured' | 'error';
 
-export const UploadSection: React.FC<UploadSectionProps> = ({
-  onAnalyze,
-  isLoading,
-  selectedProfile,
-  onProfileChange,
-  profileOptions,
-}) => {
+export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoading }) => {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -198,11 +182,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       {/* Intro Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-extrabold text-text-primary tracking-tight sm:text-4xl">
-          Rice Grain Analysis
+          Rice Grain Auto-Label
         </h1>
         <p className="text-sm text-text-secondary mt-2 max-w-2xl mx-auto">
-          Upload an image or use your device camera to detect, segment, and analyze rice grains.
-          Whole and broken grains are classified using the 3/4 length criterion.
+          Upload an image or take a photo to create a masked image and count rice grains and foreign matter.
         </p>
       </div>
 
@@ -376,46 +359,6 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </div>
         )}
 
-        {/* Whole/Broken whole-kernel reference selection */}
-        <div className="bg-surface border border-border rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <SlidersHorizontal className="w-4 h-4 text-brand shrink-0" />
-            <span className="text-xs font-semibold text-text-primary">Whole/Broken reference</span>
-          </div>
-          <div className="space-y-1.5">
-            {profileOptions.map((opt) => {
-              const active =
-                (selectedProfile === null && opt.id === '') || opt.id === selectedProfile;
-              return (
-                <button
-                  key={opt.id || 'no-profile'}
-                  type="button"
-                  onClick={() => onProfileChange(opt.id === '' ? null : opt.id)}
-                  className={`w-full text-left px-3 py-2 rounded-lg border transition ${
-                    active
-                      ? 'border-brand bg-brand-light'
-                      : 'border-border bg-surface hover:bg-surface-subtle'
-                  }`}
-                >
-                  <span className="block text-xs font-semibold text-text-primary">{opt.label}</span>
-                  <span className="block text-[10px] text-text-muted mt-0.5">{opt.detail}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Calibration Info */}
-        <div className="text-xs text-text-secondary bg-surface p-2.5 rounded-lg border border-border flex items-start gap-2">
-          <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-          <div>
-            <span className="font-medium text-text-primary">Automatic Reference Detection Active:</span>
-            <span className="block text-[11px] text-text-muted mt-0.5">
-              ArUco markers are detected automatically. If absent, measurements are accurately reported in pixels without inventing fake millimeters.
-            </span>
-          </div>
-        </div>
-
         {/* Submit / Reset */}
         <div className="flex flex-wrap items-center justify-center gap-3">
           {(previewUrl || selectedFile || cameraState === 'captured') && (
@@ -437,7 +380,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             }`}
           >
             <FileUp className="w-4 h-4" />
-            <span>{isLoading ? 'Processing Analysis...' : 'Run Segmentation Analysis'}</span>
+            <span>{isLoading ? 'Processing Image...' : 'Run Auto-Label'}</span>
           </button>
         </div>
       </form>

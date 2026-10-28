@@ -15,6 +15,8 @@ from ml.config import get_project_root
 
 logger = logging.getLogger(__name__)
 
+Tuple_Validation = tuple[bool, str]
+
 
 @dataclass
 class GrainProfile:
@@ -59,9 +61,6 @@ class GrainProfile:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-
-
-Tuple_Validation = tuple[bool, str]
 
 
 def load_grain_profile(profile_path_or_name: Union[str, Path, Dict[str, Any]]) -> Optional[GrainProfile]:
