@@ -17,7 +17,6 @@ export interface DefectItem {
   dehusked_surface_fraction?: number;
   dehusked_confidence?: number;
   immature_shrunken_status?: string;
-  proxy_score?: number;
   sprouted_weevilled_label?: string;
   probability?: number;
   confidence?: number;

@@ -182,7 +182,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
       {/* Intro Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-extrabold text-text-primary tracking-tight sm:text-4xl">
-          Rice Grain Auto-Label
+          Rice Grain Quality Analysis
         </h1>
         <p className="text-sm text-text-secondary mt-2 max-w-2xl mx-auto">
           Upload an image or take a photo to create a masked image and count rice grains and foreign matter.
@@ -380,7 +380,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
             }`}
           >
             <FileUp className="w-4 h-4" />
-            <span>{isLoading ? 'Processing Image...' : 'Run Auto-Label'}</span>
+            <span>{isLoading ? 'Analyzing Image...' : 'Analyze Rice Sample'}</span>
           </button>
         </div>
       </form>

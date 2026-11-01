@@ -10,7 +10,7 @@ export const ProcessingState: React.FC = () => {
 
       <h2 className="text-xl font-bold text-text-primary mb-2">Creating masked image</h2>
       <p className="text-xs text-text-secondary mb-8 max-w-sm mx-auto">
-        Running the fresh auto-label proxy on your upload...
+        Measuring rice grains and identifying foreign matter...
       </p>
     </div>
   );

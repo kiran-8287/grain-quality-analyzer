@@ -6,14 +6,14 @@ import { ProcessingState } from './components/ProcessingState';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-interface ProxyResult {
+interface RiceAnalysisResult {
   masked_image: string;
   original_image: string;
   image_width: number;
   image_height: number;
   rice_count: number;
   foreign_matter_count: number;
-  objects: ProxyObject[];
+  objects: DetectedObject[];
   summary: {
     whole_grain_count: number;
     broken_grain_count: number;
@@ -30,7 +30,7 @@ interface ProxyResult {
   };
 }
 
-interface ProxyObject {
+interface DetectedObject {
   id: string;
   category: 'rice' | 'foreign';
   bbox: [number, number, number, number];
@@ -51,7 +51,7 @@ interface ProxyObject {
 
 export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ProxyResult | null>(null);
+  const [result, setResult] = useState<RiceAnalysisResult | null>(null);
   const [backendHealthy, setBackendHealthy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
@@ -217,7 +217,7 @@ export const App: React.FC = () => {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_BASE}/api/analyze-proxy`, {
+      const response = await fetch(`${API_BASE}/api/rice-quality/analyze`, {
         method: 'POST',
         body: formData,
       });
@@ -225,7 +225,7 @@ export const App: React.FC = () => {
         const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
         throw new Error(errorData.detail || `Server error (${response.status})`);
       }
-      const data = (await response.json()) as ProxyResult;
+      const data = (await response.json()) as RiceAnalysisResult;
       setResult(data);
       setSelectedObjectId(data.objects.find((object) => object.category === 'rice')?.id ?? data.objects[0]?.id ?? null);
     } catch (error) {
@@ -260,7 +260,7 @@ export const App: React.FC = () => {
         {!isLoading && result && (
           <section className="animate-fadeIn space-y-6">
             <div className="rounded-xl border border-border bg-surface-subtle px-4 py-3 text-xs leading-relaxed text-text-muted">
-              Image-based estimates use grain counts and proxy-scale measurements. Whole-grain status uses the fresh proxy’s image-derived reference length and the 75% length cutoff.
+              Image-based estimates use grain counts and image-scaled measurements. Whole-grain status uses a reference estimated from the uploaded image and the 75% length cutoff.
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -339,7 +339,7 @@ export const App: React.FC = () => {
                         <InspectorStat label="Length ratio" value={selectedObject.length_ratio == null ? '—' : `${(selectedObject.length_ratio * 100).toFixed(1)}%`} />
                         <InspectorStat label="Threshold" value="75.0% (3/4 rule)" />
                       </div>
-                      <p className="mt-2 text-[10px] text-text-secondary">Basis: length ratio compared with the fresh proxy’s image-derived reference.</p>
+                      <p className="mt-2 text-[10px] text-text-secondary">Basis: length ratio compared with the whole-grain reference estimated from this image.</p>
                     </div>
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">Geometric measurements</p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -539,7 +539,7 @@ function StatusBadge({ status }: { status: 'whole' | 'broken' | 'undetermined' }
   return <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style}`}>{status}</span>;
 }
 
-function objectColor(object: ProxyObject): string {
+function objectColor(object: DetectedObject): string {
   if (object.category === 'foreign') return '#dc2626';
   if (object.whole_label === 'whole') return '#2563eb';
   if (object.whole_label === 'broken') return '#eab308';
@@ -575,7 +575,7 @@ function ToggleButton({ active, onClick, icon, label }: { active: boolean; onCli
   );
 }
 
-function ObjectList({ title, objects, selectedId, onSelect }: { title: string; objects: ProxyObject[]; selectedId: string | null; onSelect: (id: string) => void }) {
+function ObjectList({ title, objects, selectedId, onSelect }: { title: string; objects: DetectedObject[]; selectedId: string | null; onSelect: (id: string) => void }) {
   return (
     <div className="mb-4 last:mb-0">
       <div className="flex justify-between text-xs font-medium text-text-secondary mb-2">

@@ -274,6 +274,7 @@ async def analyze_rice_image(
 
 
 @router.post("/analyze-proxy")
+@router.post("/rice-quality/analyze")
 async def analyze_with_fresh_proxy(file: UploadFile = File(...)):
     """Run the standalone fresh auto-label proxy for the simplified website flow."""
     supported_types = {"image/jpeg", "image/png", "image/webp", "image/tiff", "image/bmp"}
