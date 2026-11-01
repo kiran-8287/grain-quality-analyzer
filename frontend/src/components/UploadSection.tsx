@@ -178,13 +178,13 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
   const isCameraActive = cameraState === 'active' || cameraState === 'requesting';
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="mx-auto w-full max-w-4xl px-0 py-5 sm:px-4 sm:py-8">
       {/* Intro Header */}
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-extrabold text-text-primary tracking-tight sm:text-4xl">
+        <h1 className="text-2xl font-extrabold text-text-primary tracking-tight sm:text-3xl lg:text-4xl">
           Rice Grain Quality Analysis
         </h1>
-        <p className="text-sm text-text-secondary mt-2 max-w-2xl mx-auto">
+        <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary sm:text-base">
           Upload an image or take a photo to create a masked image and count rice grains and foreign matter.
         </p>
       </div>
@@ -200,7 +200,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
               onDragOver={handleDrag}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200 ${
+              className={`relative border-2 border-dashed rounded-2xl p-5 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
                 dragActive
                   ? 'border-brand bg-brand-light'
                   : 'border-border bg-surface hover:border-border-dark hover:bg-surface-subtle'
@@ -227,7 +227,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
               type="button"
               onClick={startCamera}
               disabled={isLoading}
-              className="relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200 border-border bg-surface hover:border-border-dark hover:bg-surface-subtle disabled:opacity-40 disabled:cursor-not-allowed"
+              className="relative border-2 border-dashed rounded-2xl p-5 sm:p-8 text-center cursor-pointer transition-all duration-200 border-border bg-surface hover:border-border-dark hover:bg-surface-subtle disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <div className="w-14 h-14 rounded-2xl bg-brand-light border border-border flex items-center justify-center text-brand mx-auto mb-3">
                 <Camera className="w-7 h-7" />
@@ -272,7 +272,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
                 Cancel
               </button>
             </div>
-            <div className="relative bg-black flex items-center justify-center min-h-[300px] sm:min-h-[420px]">
+            <div className="relative bg-black flex items-center justify-center min-h-[220px] sm:min-h-[300px] lg:min-h-[420px]">
               <video
                 ref={videoRef}
                 autoPlay
@@ -305,7 +305,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
               <img
                 src={capturedPreviewUrl}
                 alt="Captured"
-                className="max-h-72 object-contain rounded-lg border border-border"
+                className="max-h-72 max-w-full object-contain rounded-lg border border-border"
               />
             </div>
             <div className="px-4 py-3 border-t border-border bg-surface-subtle flex flex-wrap items-center justify-center gap-3">
@@ -344,15 +344,15 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
               onChange={(e) => handleFiles(e.target.files)}
             />
             <div className="flex flex-col items-center gap-4">
-              <div className="relative group max-w-sm rounded-xl overflow-hidden border border-border bg-surface-subtle">
-                <img src={previewUrl || ''} alt="Upload Preview" className="max-h-72 object-contain mx-auto" />
+              <div className="relative group w-full max-w-sm rounded-xl overflow-hidden border border-border bg-surface-subtle">
+                <img src={previewUrl || ''} alt="Upload Preview" className="mx-auto max-h-72 max-w-full object-contain" />
                 <div className="absolute inset-0 bg-text-primary/0 group-hover:bg-text-primary/10 transition-opacity flex items-center justify-center">
                   <span className="text-xs text-text-primary bg-surface px-3 py-1.5 rounded-lg border border-border">
                     Click or drop to replace
                   </span>
                 </div>
               </div>
-              <div className="text-xs text-text-secondary">
+              <div className="min-w-0 max-w-full break-all text-xs text-text-secondary">
                 <span className="font-semibold text-text-primary">{selectedFile?.name}</span> ({((selectedFile?.size || 0) / 1024).toFixed(1)} KB)
               </div>
             </div>

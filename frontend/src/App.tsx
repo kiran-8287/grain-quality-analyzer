@@ -245,7 +245,7 @@ export const App: React.FC = () => {
     <div className="min-h-screen bg-surface-page text-text-primary flex flex-col">
       <Navbar onReset={handleReset} hasResult={result !== null} isBackendHealthy={backendHealthy} />
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 min-w-0 max-w-6xl mx-auto w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {errorMessage && (
           <div className="mb-6 bg-error-bg border border-error/30 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
@@ -258,12 +258,12 @@ export const App: React.FC = () => {
         {!isLoading && !result && <UploadSection onAnalyze={handleAnalyze} isLoading={isLoading} />}
 
         {!isLoading && result && (
-          <section className="animate-fadeIn space-y-6">
+          <section className="animate-fadeIn min-w-0 space-y-4 sm:space-y-6">
             <div className="rounded-xl border border-border bg-surface-subtle px-4 py-3 text-xs leading-relaxed text-text-muted">
               Image-based estimates use grain counts and image-scaled measurements. Whole-grain status uses a reference estimated from the uploaded image and the 75% length cutoff.
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-4">
               <MetricCard label="Total grains" value={result.rice_count} detail={`${result.summary.touching_cluster_count} clusters sent for splitting`} />
               <MetricCard label="Whole grains" value={result.summary.whole_grain_count} detail={`≥ 75% length${result.summary.reference_length ? ` · ref ${result.summary.reference_length.toFixed(1)} px` : ' · reference unavailable'}`} tone="green" />
               <MetricCard label="Broken grains" value={result.summary.broken_grain_count} detail={result.summary.reference_length ? '< 75% length' : 'Reference unavailable'} tone="yellow" />
@@ -271,21 +271,21 @@ export const App: React.FC = () => {
               <MetricCard label="Whole %" value={`${result.summary.whole_percent.toFixed(2)}%`} detail="Whole kernels / rice grains" tone="green" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
               <MetricCard label="Avg length" value={formatMetric(result.summary.average_length)} unit="px" detail={`Median: ${formatMetric(result.summary.median_length)}`} compact />
               <MetricCard label="Avg breadth" value={formatMetric(result.summary.average_breadth)} unit="px" detail={`Median: ${formatMetric(result.summary.median_breadth)}`} compact />
               <MetricCard label="Avg L/B ratio" value={formatMetric(result.summary.average_lb_ratio)} detail={`Median: ${formatMetric(result.summary.median_lb_ratio)}`} compact />
             </div>
 
             <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm">
-              <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mb-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-brand">Per-grain table</p>
                   <h2 className="text-base font-semibold text-text-primary">Grain Population Overview</h2>
                 </div>
                 <span className="text-xs text-text-muted">{result.rice_count} detected grains</span>
               </div>
-              <div className="max-h-[310px] overflow-auto rounded-xl border border-border">
+              <div role="region" aria-label="Grain population table" tabIndex={0} className="max-h-[310px] overflow-auto overscroll-contain rounded-xl border border-border">
                 <table className="w-full min-w-[700px] text-left text-xs">
                   <thead className="sticky top-0 bg-surface-subtle text-[10px] uppercase tracking-wide text-text-muted">
                     <tr>
@@ -319,8 +319,8 @@ export const App: React.FC = () => {
             </div>
 
             {selectedObject && (
-              <div ref={inspectorRef} className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm scroll-mt-24">
-                <div className="flex items-center justify-between gap-3 border-b border-border pb-3 mb-4">
+              <div ref={inspectorRef} className="min-w-0 rounded-2xl border border-border bg-surface p-3 sm:p-5 md:p-6 shadow-sm scroll-mt-24">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border pb-3 mb-4">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-brand">Per-grain inspector</p>
                     <h2 className="text-lg font-semibold text-text-primary">{selectedObject.category === 'rice' ? `Grain ${selectedObject.id}` : `Foreign object ${selectedObject.id}`}</h2>
@@ -364,10 +364,10 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-5 items-start">
-              <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm min-w-0">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <div>
+            <div className="grid min-w-0 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_320px] gap-3 sm:gap-5 items-start">
+              <div className="min-w-0 rounded-2xl border border-border bg-surface p-3 sm:p-5 md:p-6 shadow-sm">
+                <div className="mb-3 sm:mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
                     <h1 className="text-lg font-semibold text-text-primary">Annotated inspection</h1>
                     <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-text-secondary">
                       <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-blue-600" />Whole</span>
@@ -376,15 +376,15 @@ export const App: React.FC = () => {
                     </div>
                     <p className="mt-1 text-[10px] text-text-muted">Scroll over the image to zoom at the pointer. Turn Pan on to drag the image.</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select value={selectedObjectId ?? ''} onChange={(event) => setSelectedObjectId(event.target.value || null)} className="max-w-40 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-text-primary">
+                  <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+                    <select value={selectedObjectId ?? ''} onChange={(event) => setSelectedObjectId(event.target.value || null)} className="col-span-2 min-w-0 w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-xs text-text-primary sm:col-span-1 sm:w-36">
                       {result.objects.map((object) => <option key={object.id} value={object.id}>{object.category === 'rice' ? 'Grain' : 'Foreign'} {object.id}</option>)}
                     </select>
                     <ToggleButton active={showIds} onClick={() => setShowIds(!showIds)} icon={<Tags className="w-4 h-4" />} label={`IDs ${showIds ? 'ON' : 'OFF'}`} />
                     <ToggleButton active={showMasks} onClick={() => setShowMasks(!showMasks)} icon={showMasks ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />} label={`Masks ${showMasks ? 'ON' : 'OFF'}`} />
                     <ToggleButton active={showBoxes} onClick={() => setShowBoxes(!showBoxes)} icon={<Square className="w-4 h-4" />} label={`Boxes ${showBoxes ? 'ON' : 'OFF'}`} />
                     <ToggleButton active={panEnabled} onClick={() => { setPanEnabled(!panEnabled); setIsPanning(false); }} icon={<Move className="w-4 h-4" />} label={`Pan ${panEnabled ? 'ON' : 'OFF'}`} />
-                    <div className="flex items-center rounded-lg border border-border bg-surface">
+                    <div className="col-span-2 flex w-full items-center justify-center rounded-lg border border-border bg-surface sm:col-span-1 sm:w-auto">
                       <button type="button" onClick={() => setCenteredZoom(Math.max(0.5, +(viewerZoom - 0.25).toFixed(2)))} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
                       <button type="button" onClick={() => setCenteredZoom(1)} className="min-w-12 px-1 text-[10px] text-text-secondary">{Math.round(viewerZoom * 100)}%</button>
                       <button type="button" onClick={() => setCenteredZoom(Math.min(3, +(viewerZoom + 0.25).toFixed(2)))} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
@@ -401,13 +401,13 @@ export const App: React.FC = () => {
                   onPointerUp={handlePanEnd}
                   onPointerCancel={handlePanEnd}
                   onDragStart={(event) => event.preventDefault()}
-                  className={`bg-[#171a19] rounded-xl p-2 sm:p-4 overflow-auto overscroll-contain text-center max-h-[78vh] ${panEnabled ? 'touch-none' : 'touch-pan-y'} select-none ${isPanning ? 'cursor-grabbing' : panEnabled ? 'cursor-grab' : 'cursor-crosshair'}`}
+                  className={`bg-[#171a19] rounded-xl p-1.5 sm:p-3 md:p-4 overflow-auto overscroll-contain text-center max-h-[70vh] sm:max-h-[78vh] ${panEnabled ? 'touch-none' : 'touch-pan-y'} select-none ${isPanning ? 'cursor-grabbing' : panEnabled ? 'cursor-grab' : 'cursor-crosshair'}`}
                 >
                   <div className="relative inline-block align-middle max-w-full" style={{ transform: `scale(${viewerZoom})`, transformOrigin: `${viewerOrigin.x}% ${viewerOrigin.y}%` }}>
                     <img
                       src={showMasks ? result.masked_image : result.original_image}
                       alt={showMasks ? 'Image with individual object masks' : 'Original uploaded image'}
-                      className="block max-h-[72vh] max-w-full w-auto rounded-lg"
+                      className="block max-h-[62vh] sm:max-h-[72vh] max-w-full w-auto rounded-lg"
                     />
                     {selectedObject && selectedObject.mask_polygon.length >= 3 && (
                       <svg
@@ -519,13 +519,13 @@ function MetricCard({ label, value, detail, tone = 'neutral', unit, compact = fa
     red: 'border-red-200 bg-red-50 text-red-700',
   }[tone];
   return (
-    <div className={`rounded-2xl border p-4 sm:p-5 shadow-sm ${colors}`}>
-      <p className={`font-semibold uppercase tracking-wide text-text-muted ${compact ? 'text-[11px]' : 'text-xs'}`}>{label}</p>
+    <div className={`min-w-0 rounded-xl sm:rounded-2xl border p-2.5 sm:p-5 shadow-sm ${colors}`}>
+      <p className={`font-semibold uppercase tracking-wide text-text-muted ${compact ? 'text-[9px] sm:text-[11px]' : 'text-[10px] sm:text-xs'}`}>{label}</p>
       <div className="mt-1 flex items-baseline gap-2">
-        <p className={`font-bold leading-none ${compact ? 'text-2xl' : 'text-4xl'}`}>{value}</p>
-        {unit && <span className="text-xs text-text-muted">{unit}</span>}
+        <p className={`min-w-0 break-words font-bold leading-none ${compact ? 'text-lg sm:text-2xl' : 'text-2xl sm:text-4xl'}`}>{value}</p>
+        {unit && <span className="text-[10px] sm:text-xs text-text-muted">{unit}</span>}
       </div>
-      <p className={`mt-2 text-xs ${tone === 'neutral' ? 'text-text-muted' : 'opacity-90'}`}>{detail}</p>
+      <p className={`mt-1.5 sm:mt-2 text-[10px] leading-tight sm:text-xs ${tone === 'neutral' ? 'text-text-muted' : 'opacity-90'}`}>{detail}</p>
     </div>
   );
 }
