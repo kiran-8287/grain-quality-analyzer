@@ -26,7 +26,6 @@ from backend.app.schemas.models import (
     StandardsResponse,
 )
 from backend.app.services.export import export_result_csv, export_result_json
-from backend.app.services.job_manager import job_manager
 from backend.app.services.run_logger import structured_logger
 from ml.config import load_model_registry, load_standards
 from autolabel_proxy_fresh.rice_labeler import label_image
@@ -34,6 +33,7 @@ from autolabel_proxy_fresh.rice_labeler import label_image
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_fresh_proxy_semaphore = asyncio.Semaphore(1)
 
 
 def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
@@ -48,18 +48,27 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             temp_file.write(contents)
             temp_path = temp_file.name
 
-        image, instances, _reference_area, proxy_details = label_image(
-            temp_path, return_details=True
+        # Keep only each object's bounding-box mask. The labeler works at a
+        # reduced resolution, but retaining one full-frame mask per grain can
+        # still consume hundreds of MB on a busy sample.
+        instances = []
+
+        def collect_instance(mask: np.ndarray, category: str) -> None:
+            ys, xs = np.nonzero(mask)
+            if not len(xs):
+                return
+            x1, x2 = int(xs.min()), int(xs.max()) + 1
+            y1, y2 = int(ys.min()), int(ys.max()) + 1
+            instances.append((mask[y1:y2, x1:x2].copy(), category, x1, y1))
+
+        image, _unused_instances, _reference_area, proxy_details = label_image(
+            temp_path, instance_callback=collect_instance, return_details=True
         )
     finally:
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
 
-    rice_count = sum(category == "rice" for _, category in instances)
-    foreign_count = sum(category == "foreign" for _, category in instances)
-
     overlay = image.copy()
-    color_layer = image.copy()
     # OpenCV uses BGR channel order: rice blue, foreign matter red.
     objects = []
     category_ids = {"rice": 0, "foreign": 0}
@@ -72,21 +81,21 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
     if not np.isfinite(whole_length_reference) or whole_length_reference <= 0:
         whole_length_reference = 0.0
     whole_threshold_length = 0.75 * whole_length_reference
-    for mask, category in instances:
+    for mask, category, x1, y1 in instances:
         ys, xs = np.nonzero(mask)
-        if len(xs) == 0:
-            continue
+        xs += x1
+        ys += y1
 
         category_ids[category] += 1
         object_id = f"R{category_ids[category]}" if category == "rice" else f"F{category_ids[category]}"
-        x1, x2 = int(xs.min()), int(xs.max()) + 1
-        y1, y2 = int(ys.min()), int(ys.max()) + 1
-        crop_mask = mask[y1:y2, x1:x2]
+        x2, y2 = x1 + mask.shape[1], y1 + mask.shape[0]
+        crop_mask = mask
 
         grain_metrics = {}
         if category == "rice":
+            local_points = np.column_stack((xs - x1, ys - y1)).astype(np.float32).reshape(-1, 1, 2)
             points = np.column_stack((xs, ys)).astype(np.float32).reshape(-1, 1, 2)
-            rect_width, rect_height = cv2.minAreaRect(points)[1]
+            rect_width, rect_height = cv2.minAreaRect(local_points)[1]
             length = float(max(rect_width, rect_height))
             breadth = float(min(rect_width, rect_height))
             lb_ratio = length / breadth if breadth > 0 else 0.0
@@ -96,7 +105,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             grain_lengths.append(length)
             grain_breadths.append(breadth)
             grain_lb_ratios.append(lb_ratio)
-            mask_contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            mask_contours, _ = cv2.findContours(crop_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             hull_area = cv2.contourArea(cv2.convexHull(max(mask_contours, key=cv2.contourArea))) if mask_contours else 0.0
             solidity = min(1.0, float(mask.sum()) / max(hull_area, 1.0))
             ellipse_length = length
@@ -126,7 +135,10 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
         else:
             color = (0, 0, 255)
 
-        color_layer[mask] = color
+        overlay_region = overlay[y1:y2, x1:x2]
+        source_region = image[y1:y2, x1:x2]
+        blended_region = cv2.addWeighted(source_region, 0.58, np.full_like(source_region, color), 0.42, 0)
+        overlay_region[crop_mask] = blended_region[crop_mask]
         object_contours, _ = cv2.findContours(crop_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         mask_polygon = []
         if object_contours:
@@ -152,7 +164,8 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
         if category == "rice":
             object_data.update(grain_metrics)
         objects.append(object_data)
-    overlay = cv2.addWeighted(image, 0.58, color_layer, 0.42, 0)
+    rice_count = category_ids["rice"]
+    foreign_count = category_ids["foreign"]
 
     ok, encoded = cv2.imencode(".jpg", overlay, [cv2.IMWRITE_JPEG_QUALITY, 92])
     if not ok:
@@ -258,6 +271,10 @@ async def analyze_rice_image(
             "reference_mm": reference_mm,
         }
 
+    # The simplified live flow uses the fresh proxy. Import the legacy
+    # pipeline only when its separate endpoint is actually requested.
+    from backend.app.services.job_manager import job_manager
+
     result = job_manager.process_sync(
         image_bytes=contents,
         filename=file.filename or "uploaded.jpg",
@@ -283,16 +300,17 @@ async def analyze_with_fresh_proxy(file: UploadFile = File(...)):
         raise HTTPException(status_code=415, detail="Upload a JPEG, PNG, WebP, TIFF, or BMP image.")
 
     max_bytes = 25 * 1024 * 1024
-    contents = await file.read(max_bytes + 1)
-    if not contents:
-        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
-    if len(contents) > max_bytes:
-        raise HTTPException(status_code=413, detail="Image exceeds the 25 MB upload limit.")
+    async with _fresh_proxy_semaphore:
+        contents = await file.read(max_bytes + 1)
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+        if len(contents) > max_bytes:
+            raise HTTPException(status_code=413, detail="Image exceeds the 25 MB upload limit.")
 
-    try:
-        return await run_in_threadpool(_run_fresh_proxy, contents, file.filename or "upload.jpg")
-    except (ValueError, cv2.error) as exc:
-        raise HTTPException(status_code=400, detail=f"Could not analyze this image: {exc}") from exc
+        try:
+            return await run_in_threadpool(_run_fresh_proxy, contents, file.filename or "upload.jpg")
+        except (ValueError, cv2.error) as exc:
+            raise HTTPException(status_code=400, detail=f"Could not analyze this image: {exc}") from exc
 
 
 @router.post("/analyze-ml", response_model=ExperimentalGrainAnalysisResponse)
