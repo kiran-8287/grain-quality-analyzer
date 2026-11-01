@@ -354,6 +354,7 @@ def label_image(path, min_area=400, instance_callback=None, max_split_clusters=N
     stone, rice = segment_colour(im)
     rng = np.random.default_rng(seed)
     inst = []
+    split_cluster_count = 0
 
     def emit(m, cls):
         if instance_callback:
@@ -400,6 +401,7 @@ def label_image(path, min_area=400, instance_callback=None, max_split_clusters=N
             full = np.zeros(cc.shape, bool); full[y:y + h, x:x + w] = m
             emit(full, 'rice')
             continue
+        split_cluster_count += 1
         k_est = m.sum() / g.area
         if max_split_clusters is not None and round(k_est) > max_split_clusters:
             continue
@@ -419,7 +421,11 @@ def label_image(path, min_area=400, instance_callback=None, max_split_clusters=N
             full = np.zeros(cc.shape, bool); full[y:y + h, x:x + w] = piece
             emit(full, 'rice')
     if return_details:
-        return im, inst, g.area, g.length
+        return im, inst, g.area, {
+            'reference_length': float(g.length),
+            'reference_width': float(g.width),
+            'split_cluster_count': split_cluster_count,
+        }
     return im, inst, g.area
 
 

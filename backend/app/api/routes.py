@@ -48,7 +48,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             temp_file.write(contents)
             temp_path = temp_file.name
 
-        image, instances, _reference_area, whole_length_reference = label_image(
+        image, instances, _reference_area, proxy_details = label_image(
             temp_path, return_details=True
         )
     finally:
@@ -67,10 +67,11 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
     grain_breadths = []
     grain_lb_ratios = []
     whole_grain_count = 0
-    whole_threshold_length = 0.75 * float(whole_length_reference)
+    whole_length_reference = float(proxy_details.get("reference_length", 0.0))
+    if not np.isfinite(whole_length_reference) or whole_length_reference <= 0:
+        whole_length_reference = 0.0
+    whole_threshold_length = 0.75 * whole_length_reference
     for mask, category in instances:
-        color = (255, 0, 0) if category == "rice" else (0, 0, 255)
-        color_layer[mask] = color
         ys, xs = np.nonzero(mask)
         if len(xs) == 0:
             continue
@@ -80,6 +81,50 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
         x1, x2 = int(xs.min()), int(xs.max()) + 1
         y1, y2 = int(ys.min()), int(ys.max()) + 1
         crop_mask = mask[y1:y2, x1:x2]
+
+        grain_metrics = {}
+        if category == "rice":
+            points = np.column_stack((xs, ys)).astype(np.float32).reshape(-1, 1, 2)
+            rect_width, rect_height = cv2.minAreaRect(points)[1]
+            length = float(max(rect_width, rect_height))
+            breadth = float(min(rect_width, rect_height))
+            lb_ratio = length / breadth if breadth > 0 else 0.0
+            is_whole = whole_length_reference > 0 and length >= whole_threshold_length
+            whole_grain_count += int(is_whole)
+            grain_lengths.append(length)
+            grain_breadths.append(breadth)
+            grain_lb_ratios.append(lb_ratio)
+            mask_contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            hull_area = cv2.contourArea(cv2.convexHull(max(mask_contours, key=cv2.contourArea))) if mask_contours else 0.0
+            solidity = min(1.0, float(mask.sum()) / max(hull_area, 1.0))
+            ellipse_length = length
+            if len(points) >= 5:
+                try:
+                    ellipse_axes = cv2.fitEllipse(points)[1]
+                    ellipse_length = float(max(ellipse_axes))
+                except cv2.error:
+                    pass
+            whole_label = (
+                "undetermined"
+                if whole_length_reference <= 0
+                else ("whole" if is_whole else "broken")
+            )
+            color = (255, 0, 0) if whole_label == "whole" else ((0, 255, 255) if whole_label == "broken" else (128, 128, 128))
+            grain_metrics = {
+                "length": round(length, 2),
+                "effective_length": round(length, 2),
+                "ellipse_length": round(ellipse_length, 2),
+                "breadth": round(breadth, 2),
+                "lb_ratio": round(lb_ratio, 2),
+                "length_ratio": round(length / whole_length_reference, 4) if whole_length_reference else None,
+                "mask_area": int(mask.sum()),
+                "solidity": round(solidity, 4),
+                "whole_label": whole_label,
+            }
+        else:
+            color = (0, 0, 255)
+
+        color_layer[mask] = color
         rgba_mask = np.zeros((*crop_mask.shape, 4), dtype=np.uint8)
         rgba_mask[crop_mask] = (*color, 255)
         mask_ok, mask_encoded = cv2.imencode(".png", rgba_mask)
@@ -95,22 +140,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             "mask_image": f"data:image/png;base64,{base64.b64encode(mask_encoded.tobytes()).decode('ascii')}",
         }
         if category == "rice":
-            points = np.column_stack((xs, ys)).astype(np.float32).reshape(-1, 1, 2)
-            rect_width, rect_height = cv2.minAreaRect(points)[1]
-            length = float(max(rect_width, rect_height))
-            breadth = float(min(rect_width, rect_height))
-            lb_ratio = length / breadth if breadth > 0 else 0.0
-            is_whole = length >= whole_threshold_length
-            whole_grain_count += int(is_whole)
-            grain_lengths.append(length)
-            grain_breadths.append(breadth)
-            grain_lb_ratios.append(lb_ratio)
-            object_data.update({
-                "length": round(length, 2),
-                "breadth": round(breadth, 2),
-                "lb_ratio": round(lb_ratio, 2),
-                "whole_label": "whole" if is_whole else "broken",
-            })
+            object_data.update(grain_metrics)
         objects.append(object_data)
     overlay = cv2.addWeighted(image, 0.58, color_layer, 0.42, 0)
 
@@ -127,7 +157,8 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
         "whole_grain_count": whole_grain_count,
         "whole_percent": round(100 * whole_grain_count / rice_denominator, 2) if rice_denominator else 0.0,
         "whole_threshold_length": round(whole_threshold_length, 2),
-        "reference_length": round(float(whole_length_reference), 2),
+        "reference_length": round(whole_length_reference, 2) if whole_length_reference else None,
+        "touching_cluster_count": int(proxy_details.get("split_cluster_count", 0)),
         "average_length": round(float(np.mean(grain_lengths)), 2) if grain_lengths else None,
         "median_length": round(float(np.median(grain_lengths)), 2) if grain_lengths else None,
         "average_breadth": round(float(np.mean(grain_breadths)), 2) if grain_breadths else None,
