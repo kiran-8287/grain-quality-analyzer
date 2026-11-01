@@ -67,6 +67,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
     grain_breadths = []
     grain_lb_ratios = []
     whole_grain_count = 0
+    broken_grain_count = 0
     whole_length_reference = float(proxy_details.get("reference_length", 0.0))
     if not np.isfinite(whole_length_reference) or whole_length_reference <= 0:
         whole_length_reference = 0.0
@@ -91,6 +92,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             lb_ratio = length / breadth if breadth > 0 else 0.0
             is_whole = whole_length_reference > 0 and length >= whole_threshold_length
             whole_grain_count += int(is_whole)
+            broken_grain_count += int(whole_length_reference > 0 and not is_whole)
             grain_lengths.append(length)
             grain_breadths.append(breadth)
             grain_lb_ratios.append(lb_ratio)
@@ -163,6 +165,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
     rice_denominator = len(grain_lengths)
     summary = {
         "whole_grain_count": whole_grain_count,
+        "broken_grain_count": broken_grain_count,
         "whole_percent": round(100 * whole_grain_count / rice_denominator, 2) if rice_denominator else 0.0,
         "whole_threshold_length": round(whole_threshold_length, 2),
         "reference_length": round(whole_length_reference, 2) if whole_length_reference else None,

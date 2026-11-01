@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Eye, EyeOff, Square, Tags, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Square, Tags, ZoomIn, ZoomOut, Maximize2, Move } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { UploadSection } from './components/UploadSection';
 import { ProcessingState } from './components/ProcessingState';
@@ -16,6 +16,7 @@ interface ProxyResult {
   objects: ProxyObject[];
   summary: {
     whole_grain_count: number;
+    broken_grain_count: number;
     whole_percent: number;
     whole_threshold_length: number;
     reference_length: number | null;
@@ -55,10 +56,16 @@ export const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [showMasks, setShowMasks] = useState(true);
-  const [showBoxes, setShowBoxes] = useState(true);
-  const [showIds, setShowIds] = useState(true);
+  const [showBoxes, setShowBoxes] = useState(false);
+  const [showIds, setShowIds] = useState(false);
   const [viewerZoom, setViewerZoom] = useState(1);
+  const [viewerOrigin, setViewerOrigin] = useState({ x: 50, y: 50 });
+  const [panEnabled, setPanEnabled] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   const inspectorRef = useRef<HTMLDivElement>(null);
+  const imageViewportRef = useRef<HTMLDivElement>(null);
+  const panRef = useRef<{ pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number; moved: boolean } | null>(null);
+  const didPanRef = useRef(false);
 
   const selectedObject = useMemo(
     () => result?.objects.find((object) => object.id === selectedObjectId) ?? null,
@@ -73,6 +80,10 @@ export const App: React.FC = () => {
   };
 
   const handleImageClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (didPanRef.current) {
+      didPanRef.current = false;
+      return;
+    }
     if (!result) return;
     const image = event.currentTarget.querySelector('img');
     if (!image) return;
@@ -93,6 +104,94 @@ export const App: React.FC = () => {
     });
     selectFromImage(hits[0].id);
   };
+
+  const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!panEnabled) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const viewport = imageViewportRef.current;
+    if (!viewport) return;
+    panRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      moved: false,
+    };
+    viewport.setPointerCapture(event.pointerId);
+  };
+
+  const handlePanMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    const viewport = imageViewportRef.current;
+    if (!pan || !viewport || pan.pointerId !== event.pointerId) return;
+    const dx = event.clientX - pan.startX;
+    const dy = event.clientY - pan.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 4) {
+      pan.moved = true;
+      setIsPanning(true);
+    }
+    if (pan.moved) {
+      event.preventDefault();
+      viewport.scrollLeft = pan.scrollLeft - dx;
+      viewport.scrollTop = pan.scrollTop - dy;
+    }
+  };
+
+  const handlePanEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    didPanRef.current = pan.moved;
+    panRef.current = null;
+    setIsPanning(false);
+    if (imageViewportRef.current?.hasPointerCapture(event.pointerId)) {
+      imageViewportRef.current.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const setCenteredZoom = (nextZoom: number) => {
+    setViewerOrigin({ x: 50, y: 50 });
+    setViewerZoom(nextZoom);
+    if (nextZoom === 1) {
+      window.requestAnimationFrame(() => {
+        if (imageViewportRef.current) {
+          imageViewportRef.current.scrollLeft = 0;
+          imageViewportRef.current.scrollTop = 0;
+        }
+      });
+    }
+  };
+
+  useEffect(() => {
+    const viewport = imageViewportRef.current;
+    if (!viewport || !result) return;
+
+    const onWheel = (event: WheelEvent) => {
+      const image = viewport.querySelector('img');
+      if (!image) return;
+      const imageRect = image.getBoundingClientRect();
+      if (event.clientX < imageRect.left || event.clientX > imageRect.right || event.clientY < imageRect.top || event.clientY > imageRect.bottom) return;
+
+      // A native non-passive listener is required to stop wheel events from
+      // scrolling the document while the cursor is over the image.
+      event.preventDefault();
+      const anchorX = Math.min(1, Math.max(0, (event.clientX - imageRect.left) / imageRect.width));
+      const anchorY = Math.min(1, Math.max(0, (event.clientY - imageRect.top) / imageRect.height));
+      const nextZoom = Math.min(3, Math.max(0.5, viewerZoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+      if (nextZoom === viewerZoom) return;
+
+      setViewerOrigin({ x: anchorX * 100, y: anchorY * 100 });
+      setViewerZoom(nextZoom);
+      window.requestAnimationFrame(() => {
+        const nextRect = image.getBoundingClientRect();
+        viewport.scrollLeft += nextRect.left + anchorX * nextRect.width - event.clientX;
+        viewport.scrollTop += nextRect.top + anchorY * nextRect.height - event.clientY;
+      });
+    };
+
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', onWheel);
+  }, [result, viewerZoom]);
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -164,10 +263,11 @@ export const App: React.FC = () => {
               Image-based estimates use grain counts and proxy-scale measurements. Whole-grain status uses the fresh proxy’s image-derived reference length and the 75% length cutoff.
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
               <MetricCard label="Total grains" value={result.rice_count} detail={`${result.summary.touching_cluster_count} clusters sent for splitting`} />
               <MetricCard label="Whole grains" value={result.summary.whole_grain_count} detail={`≥ 75% length${result.summary.reference_length ? ` · ref ${result.summary.reference_length.toFixed(1)} px` : ' · reference unavailable'}`} tone="green" />
-              <MetricCard label="Foreign objects" value={result.foreign_matter_count} detail="Non-rice objects detected" tone="amber" />
+              <MetricCard label="Broken grains" value={result.summary.broken_grain_count} detail={result.summary.reference_length ? '< 75% length' : 'Reference unavailable'} tone="yellow" />
+              <MetricCard label="Foreign objects" value={result.foreign_matter_count} detail="Non-rice objects detected" tone="red" />
               <MetricCard label="Whole %" value={`${result.summary.whole_percent.toFixed(2)}%`} detail="Whole kernels / rice grains" tone="green" />
             </div>
 
@@ -274,6 +374,7 @@ export const App: React.FC = () => {
                       <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />Broken</span>
                       <span className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-red-600" />Foreign</span>
                     </div>
+                    <p className="mt-1 text-[10px] text-text-muted">Scroll over the image to zoom at the pointer. Turn Pan on to drag the image.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <select value={selectedObjectId ?? ''} onChange={(event) => setSelectedObjectId(event.target.value || null)} className="max-w-40 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-text-primary">
@@ -282,22 +383,49 @@ export const App: React.FC = () => {
                     <ToggleButton active={showIds} onClick={() => setShowIds(!showIds)} icon={<Tags className="w-4 h-4" />} label={`IDs ${showIds ? 'ON' : 'OFF'}`} />
                     <ToggleButton active={showMasks} onClick={() => setShowMasks(!showMasks)} icon={showMasks ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />} label={`Masks ${showMasks ? 'ON' : 'OFF'}`} />
                     <ToggleButton active={showBoxes} onClick={() => setShowBoxes(!showBoxes)} icon={<Square className="w-4 h-4" />} label={`Boxes ${showBoxes ? 'ON' : 'OFF'}`} />
+                    <ToggleButton active={panEnabled} onClick={() => { setPanEnabled(!panEnabled); setIsPanning(false); }} icon={<Move className="w-4 h-4" />} label={`Pan ${panEnabled ? 'ON' : 'OFF'}`} />
                     <div className="flex items-center rounded-lg border border-border bg-surface">
-                      <button type="button" onClick={() => setViewerZoom((zoom) => Math.max(0.5, +(zoom - 0.25).toFixed(2)))} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
-                      <button type="button" onClick={() => setViewerZoom(1)} className="min-w-12 px-1 text-[10px] text-text-secondary">{Math.round(viewerZoom * 100)}%</button>
-                      <button type="button" onClick={() => setViewerZoom((zoom) => Math.min(3, +(zoom + 0.25).toFixed(2)))} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
-                      <button type="button" onClick={() => setViewerZoom(1)} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Reset zoom"><Maximize2 className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => setCenteredZoom(Math.max(0.5, +(viewerZoom - 0.25).toFixed(2)))} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => setCenteredZoom(1)} className="min-w-12 px-1 text-[10px] text-text-secondary">{Math.round(viewerZoom * 100)}%</button>
+                      <button type="button" onClick={() => setCenteredZoom(Math.min(3, +(viewerZoom + 0.25).toFixed(2)))} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => setCenteredZoom(1)} className="p-1.5 text-text-secondary hover:text-text-primary" aria-label="Reset zoom"><Maximize2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                 </div>
 
-                <div onClick={handleImageClick} className="bg-[#171a19] rounded-xl p-2 sm:p-4 overflow-auto text-center max-h-[78vh] cursor-crosshair">
-                  <div className="relative inline-block align-middle max-w-full" style={{ transform: `scale(${viewerZoom})`, transformOrigin: 'top center' }}>
+                <div
+                  ref={imageViewportRef}
+                  onClick={handleImageClick}
+                  onPointerDown={handlePanStart}
+                  onPointerMove={handlePanMove}
+                  onPointerUp={handlePanEnd}
+                  onPointerCancel={handlePanEnd}
+                  onDragStart={(event) => event.preventDefault()}
+                  className={`bg-[#171a19] rounded-xl p-2 sm:p-4 overflow-auto overscroll-contain text-center max-h-[78vh] ${panEnabled ? 'touch-none' : 'touch-pan-y'} select-none ${isPanning ? 'cursor-grabbing' : panEnabled ? 'cursor-grab' : 'cursor-crosshair'}`}
+                >
+                  <div className="relative inline-block align-middle max-w-full" style={{ transform: `scale(${viewerZoom})`, transformOrigin: `${viewerOrigin.x}% ${viewerOrigin.y}%` }}>
                     <img
                       src={showMasks ? result.masked_image : result.original_image}
                       alt={showMasks ? 'Image with individual object masks' : 'Original uploaded image'}
                       className="block max-h-[72vh] max-w-full w-auto rounded-lg"
                     />
+                    {selectedObject && selectedObject.mask_polygon.length >= 3 && (
+                      <svg
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+                        viewBox={`0 0 ${result.image_width} ${result.image_height}`}
+                        preserveAspectRatio="none"
+                      >
+                        <polygon
+                          points={selectedObject.mask_polygon.map(([x, y]) => `${x},${y}`).join(' ')}
+                          fill="none"
+                          stroke="#ffffff"
+                          strokeWidth="1.25"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </svg>
+                    )}
                     {result.objects.map((object) => {
                       const [x, y, width, height] = object.bbox;
                       const [centerX, centerY] = object.centroid;
@@ -309,7 +437,7 @@ export const App: React.FC = () => {
                             <button
                               type="button"
                               aria-label={`Select ${object.category} ${object.id}`}
-                              onClick={() => selectFromImage(object.id)}
+                              onClick={(event) => event.preventDefault()}
                               className="absolute border-2 bg-transparent"
                               style={{ left: `${(x / result.image_width) * 100}%`, top: `${(y / result.image_height) * 100}%`, width: `${(width / result.image_width) * 100}%`, height: `${(height / result.image_height) * 100}%`, borderColor: color, boxShadow: isSelected ? `0 0 0 2px white, 0 0 0 4px ${color}` : undefined }}
                             />
@@ -317,7 +445,7 @@ export const App: React.FC = () => {
                           {showIds && (
                             <button
                               type="button"
-                              onClick={() => selectFromImage(object.id)}
+                              onClick={(event) => event.preventDefault()}
                               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md ring-1 ring-white/80"
                               style={{ left: `${(centerX / result.image_width) * 100}%`, top: `${(centerY / result.image_height) * 100}%`, backgroundColor: color, zIndex: isSelected ? 20 : 10 }}
                             >
@@ -379,7 +507,7 @@ function MetricCard({ label, value, detail, tone = 'neutral', unit, compact = fa
   label: string;
   value: string | number;
   detail: string;
-  tone?: 'neutral' | 'green' | 'amber';
+  tone?: 'neutral' | 'green' | 'amber' | 'yellow' | 'red';
   unit?: string;
   compact?: boolean;
 }) {
@@ -387,6 +515,8 @@ function MetricCard({ label, value, detail, tone = 'neutral', unit, compact = fa
     neutral: 'border-border bg-surface text-text-primary',
     green: 'border-emerald-200 bg-white text-emerald-600',
     amber: 'border-amber-200 bg-amber-50/70 text-amber-700',
+    yellow: 'border-yellow-300 bg-yellow-50 text-yellow-800',
+    red: 'border-red-200 bg-red-50 text-red-700',
   }[tone];
   return (
     <div className={`rounded-2xl border p-4 sm:p-5 shadow-sm ${colors}`}>
