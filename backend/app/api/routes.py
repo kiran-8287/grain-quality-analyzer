@@ -125,6 +125,13 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             color = (0, 0, 255)
 
         color_layer[mask] = color
+        object_contours, _ = cv2.findContours(crop_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        mask_polygon = []
+        if object_contours:
+            contour = max(object_contours, key=cv2.contourArea)
+            epsilon = max(1.0, 0.005 * cv2.arcLength(contour, True))
+            simplified = cv2.approxPolyDP(contour, epsilon, True).reshape(-1, 2)
+            mask_polygon = [[int(px + x1), int(py + y1)] for px, py in simplified]
         rgba_mask = np.zeros((*crop_mask.shape, 4), dtype=np.uint8)
         rgba_mask[crop_mask] = (*color, 255)
         mask_ok, mask_encoded = cv2.imencode(".png", rgba_mask)
@@ -136,6 +143,7 @@ def _run_fresh_proxy(contents: bytes, filename: str) -> dict[str, Any]:
             "category": category,
             "bbox": [x1, y1, x2 - x1, y2 - y1],
             "centroid": [float(xs.mean()), float(ys.mean())],
+            "mask_polygon": mask_polygon,
             "pixel_count": int(crop_mask.sum()),
             "mask_image": f"data:image/png;base64,{base64.b64encode(mask_encoded.tobytes()).decode('ascii')}",
         }

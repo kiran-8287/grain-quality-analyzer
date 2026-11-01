@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Eye, EyeOff, Square, Tags, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { UploadSection } from './components/UploadSection';
@@ -34,6 +34,7 @@ interface ProxyObject {
   category: 'rice' | 'foreign';
   bbox: [number, number, number, number];
   centroid: [number, number];
+  mask_polygon: [number, number][];
   pixel_count: number;
   mask_image: string;
   length?: number;
@@ -57,11 +58,41 @@ export const App: React.FC = () => {
   const [showBoxes, setShowBoxes] = useState(true);
   const [showIds, setShowIds] = useState(true);
   const [viewerZoom, setViewerZoom] = useState(1);
+  const inspectorRef = useRef<HTMLDivElement>(null);
 
   const selectedObject = useMemo(
     () => result?.objects.find((object) => object.id === selectedObjectId) ?? null,
     [result, selectedObjectId],
   );
+
+  const selectFromImage = (id: string) => {
+    setSelectedObjectId(id);
+    window.requestAnimationFrame(() => {
+      inspectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
+
+  const handleImageClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!result) return;
+    const image = event.currentTarget.querySelector('img');
+    if (!image) return;
+    const rect = image.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const px = ((event.clientX - rect.left) / rect.width) * result.image_width;
+    const py = ((event.clientY - rect.top) / rect.height) * result.image_height;
+    const hits = result.objects.filter((object) =>
+      object.mask_polygon.length >= 3 && pointInPolygon(px, py, object.mask_polygon),
+    );
+    if (!hits.length) return;
+
+    hits.sort((a, b) => {
+      const distanceA = Math.hypot(a.centroid[0] - px, a.centroid[1] - py);
+      const distanceB = Math.hypot(b.centroid[0] - px, b.centroid[1] - py);
+      return distanceA - distanceB;
+    });
+    selectFromImage(hits[0].id);
+  };
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -188,7 +219,7 @@ export const App: React.FC = () => {
             </div>
 
             {selectedObject && (
-              <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm">
+              <div ref={inspectorRef} className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm scroll-mt-24">
                 <div className="flex items-center justify-between gap-3 border-b border-border pb-3 mb-4">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-brand">Per-grain inspector</p>
@@ -260,7 +291,7 @@ export const App: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-[#171a19] rounded-xl p-2 sm:p-4 overflow-auto text-center max-h-[78vh]">
+                <div onClick={handleImageClick} className="bg-[#171a19] rounded-xl p-2 sm:p-4 overflow-auto text-center max-h-[78vh] cursor-crosshair">
                   <div className="relative inline-block align-middle max-w-full" style={{ transform: `scale(${viewerZoom})`, transformOrigin: 'top center' }}>
                     <img
                       src={showMasks ? result.masked_image : result.original_image}
@@ -278,7 +309,7 @@ export const App: React.FC = () => {
                             <button
                               type="button"
                               aria-label={`Select ${object.category} ${object.id}`}
-                              onClick={() => setSelectedObjectId(object.id)}
+                              onClick={() => selectFromImage(object.id)}
                               className="absolute border-2 bg-transparent"
                               style={{ left: `${(x / result.image_width) * 100}%`, top: `${(y / result.image_height) * 100}%`, width: `${(width / result.image_width) * 100}%`, height: `${(height / result.image_height) * 100}%`, borderColor: color, boxShadow: isSelected ? `0 0 0 2px white, 0 0 0 4px ${color}` : undefined }}
                             />
@@ -286,7 +317,7 @@ export const App: React.FC = () => {
                           {showIds && (
                             <button
                               type="button"
-                              onClick={() => setSelectedObjectId(object.id)}
+                              onClick={() => selectFromImage(object.id)}
                               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md ring-1 ring-white/80"
                               style={{ left: `${(centerX / result.image_width) * 100}%`, top: `${(centerY / result.image_height) * 100}%`, backgroundColor: color, zIndex: isSelected ? 20 : 10 }}
                             >
@@ -383,6 +414,18 @@ function objectColor(object: ProxyObject): string {
   if (object.whole_label === 'whole') return '#2563eb';
   if (object.whole_label === 'broken') return '#eab308';
   return '#6b7280';
+}
+
+function pointInPolygon(x: number, y: number, polygon: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const crosses = (yi > y) !== (yj > y)
+      && x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
 }
 
 function InspectorStat({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
