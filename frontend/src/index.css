@@ -41,6 +41,29 @@
     background-color: #F7F5EF;
     color: #26332B;
   }
+
+  :focus-visible {
+    outline: 3px solid #285943;
+    outline-offset: 2px;
+  }
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  transform: translateY(-180%);
+  border-radius: 0.5rem;
+  background: #285943;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 /* Custom scrollbars */
@@ -169,4 +192,15 @@ canvas.phase1-canvas {
 .phase1-conf-shimmer {
   background-size: 200% 100%;
   animation: phase1-shimmer 2.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Eye, EyeOff, Square, Tags, ZoomIn, ZoomOut, Maximize2, Move } from 'lucide-react';
+import { AlertCircle, Download, Eye, EyeOff, FileSpreadsheet, Square, Tags, ZoomIn, ZoomOut, Maximize2, Move } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { UploadSection } from './components/UploadSection';
 import { ProcessingState } from './components/ProcessingState';
@@ -52,8 +52,12 @@ interface DetectedObject {
 export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<RiceAnalysisResult | null>(null);
-  const [backendHealthy, setBackendHealthy] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [analyzedFile, setAnalyzedFile] = useState<{ name: string; size: number } | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [grainSearch, setGrainSearch] = useState('');
+  const [grainStatusFilter, setGrainStatusFilter] = useState<'all' | 'whole' | 'broken' | 'undetermined'>('all');
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [showMasks, setShowMasks] = useState(true);
   const [showBoxes, setShowBoxes] = useState(false);
@@ -71,6 +75,24 @@ export const App: React.FC = () => {
     () => result?.objects.find((object) => object.id === selectedObjectId) ?? null,
     [result, selectedObjectId],
   );
+  const visibleGrains = useMemo(() => {
+    const query = grainSearch.trim().toLowerCase();
+    return (result?.objects ?? []).filter((object) => {
+      if (object.category !== 'rice') return false;
+      if (grainStatusFilter !== 'all' && object.whole_label !== grainStatusFilter) return false;
+      return !query || object.id.toLowerCase().includes(query);
+    });
+  }, [result, grainSearch, grainStatusFilter]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [isLoading]);
 
   const selectFromImage = (id: string) => {
     setSelectedObjectId(id);
@@ -197,9 +219,9 @@ export const App: React.FC = () => {
     const checkHealth = async () => {
       try {
         const response = await fetch(`${API_BASE}/health`);
-        setBackendHealthy(response.ok && (await response.json()).status === 'healthy');
+        setBackendStatus(response.ok && (await response.json()).status === 'healthy' ? 'online' : 'offline');
       } catch {
-        setBackendHealthy(false);
+        setBackendStatus('offline');
       }
     };
 
@@ -212,6 +234,7 @@ export const App: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     setResult(null);
+    setAnalyzedFile({ name: file.name, size: file.size });
 
     const formData = new FormData();
     formData.append('file', file);
@@ -223,13 +246,21 @@ export const App: React.FC = () => {
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
-        throw new Error(errorData.detail || `Server error (${response.status})`);
+        const details = errorData.detail || `Server error (${response.status})`;
+        throw new Error(response.status === 413
+          ? 'This image is larger than the 25 MB upload limit. Choose a smaller image and try again.'
+          : response.status === 415
+            ? 'This image format is not supported. Choose a JPEG, PNG, WebP, TIFF, or BMP image.'
+            : details);
       }
       const data = (await response.json()) as RiceAnalysisResult;
       setResult(data);
       setSelectedObjectId(data.objects.find((object) => object.category === 'rice')?.id ?? data.objects[0]?.id ?? null);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to analyze this image.');
+      const message = error instanceof Error ? error.message : '';
+      setErrorMessage(message === 'Failed to fetch'
+        ? 'Could not connect to the analysis service. Check your connection and try again.'
+        : message || 'Unable to analyze this image. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -239,28 +270,85 @@ export const App: React.FC = () => {
     setResult(null);
     setErrorMessage(null);
     setSelectedObjectId(null);
+    setAnalyzedFile(null);
+    setGrainSearch('');
+    setGrainStatusFilter('all');
+    setViewerZoom(1);
+    setViewerOrigin({ x: 50, y: 50 });
+  };
+
+  const downloadDataUrl = (dataUrl: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const downloadCsv = () => {
+    if (!result) return;
+    const header = ['ID', 'Type', 'Status', 'Length (px)', 'Length ratio (%)', 'Breadth (px)', 'L/B ratio', 'Mask area (px2)', 'X', 'Y', 'Width', 'Height'];
+    const escapeCsv = (value: string | number | null | undefined) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = result.objects.map((object) => [
+      object.id,
+      object.category === 'rice' ? 'rice' : 'foreign matter',
+      object.category === 'rice' ? object.whole_label : '',
+      object.length ?? '',
+      object.length_ratio == null ? '' : (object.length_ratio * 100).toFixed(1),
+      object.breadth ?? '',
+      object.lb_ratio ?? '',
+      object.pixel_count,
+      ...object.bbox,
+    ].map(escapeCsv).join(','));
+    const csv = [header.map(escapeCsv).join(','), ...rows].join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rice-analysis-${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
     <div className="min-h-screen bg-surface-page text-text-primary flex flex-col">
-      <Navbar onReset={handleReset} hasResult={result !== null} isBackendHealthy={backendHealthy} />
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <Navbar onReset={handleReset} hasResult={result !== null} backendStatus={backendStatus} />
 
-      <main className="flex-1 min-w-0 max-w-6xl mx-auto w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <main id="main-content" className="flex-1 min-w-0 max-w-6xl mx-auto w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {errorMessage && (
-          <div className="mb-6 bg-error-bg border border-error/30 rounded-xl p-4 flex items-start gap-3">
+          <div role="alert" className="mb-6 bg-error-bg border border-error/30 rounded-xl p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
             <p className="text-sm text-text-secondary">{errorMessage}</p>
           </div>
         )}
 
-        {isLoading && <ProcessingState />}
+        {isLoading && <ProcessingState elapsedSeconds={elapsedSeconds} filename={analyzedFile?.name} />}
 
-        {!isLoading && !result && <UploadSection onAnalyze={handleAnalyze} isLoading={isLoading} />}
+        {!result && <div hidden={isLoading}><UploadSection onAnalyze={handleAnalyze} isLoading={isLoading} /></div>}
 
         {!isLoading && result && (
           <section className="animate-fadeIn min-w-0 space-y-4 sm:space-y-6">
             <div className="rounded-xl border border-border bg-surface-subtle px-4 py-3 text-xs leading-relaxed text-text-muted">
-              Image-based estimates use grain counts and image-scaled measurements. Whole-grain status uses a reference estimated from the uploaded image and the 75% length cutoff.
+              Counts and measurements are image-based estimates. Whole/broken labels compare each grain with a reference length estimated from this image; they are not a certified weight-based grade.
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-text-primary">Analysis results</p>
+                <p className="mt-0.5 truncate text-xs text-text-secondary" title={analyzedFile?.name}>{analyzedFile?.name ?? 'Uploaded image'}{analyzedFile ? ` · ${(analyzedFile.size / 1024).toFixed(0)} KB` : ''}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => downloadDataUrl(result.masked_image, 'rice-analysis-masked.jpg')} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-dark">
+                  <Download className="h-4 w-4" /> Masked image
+                </button>
+                <button type="button" onClick={downloadCsv} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle">
+                  <FileSpreadsheet className="h-4 w-4" /> Grain data CSV
+                </button>
+                <button type="button" onClick={handleReset} className="min-h-10 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-subtle">New analysis</button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-4">
@@ -277,13 +365,29 @@ export const App: React.FC = () => {
               <MetricCard label="Avg L/B ratio" value={formatMetric(result.summary.average_lb_ratio)} detail={`Median: ${formatMetric(result.summary.median_lb_ratio)}`} compact />
             </div>
 
+            <details className="group rounded-xl border border-border bg-surface px-4 py-3 text-xs text-text-secondary">
+              <summary className="cursor-pointer font-semibold text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">How are whole and broken grains classified?</summary>
+              <p className="mt-2 max-w-3xl leading-relaxed">The analysis estimates a reference length from grains in this image. A detected rice object at least 75% of that reference is labeled whole; a shorter object is labeled broken. Measurements are in pixels and depend on image scale. This count-based estimate does not replace a laboratory or weight-based regulatory test.</p>
+            </details>
+
             <div className="rounded-2xl border border-border bg-surface p-4 sm:p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mb-3">
+              <div className="flex flex-col gap-3 mb-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-brand">Per-grain table</p>
                   <h2 className="text-base font-semibold text-text-primary">Grain Population Overview</h2>
+                  <span className="text-xs text-text-muted">Showing {visibleGrains.length} of {result.rice_count} grains</span>
                 </div>
-                <span className="text-xs text-text-muted">{result.rice_count} detected grains</span>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(150px,1fr)_auto]">
+                  <label className="sr-only" htmlFor="grain-search">Find a grain by ID</label>
+                  <input id="grain-search" type="search" value={grainSearch} onChange={(event) => setGrainSearch(event.target.value)} placeholder="Find grain ID" className="min-h-10 rounded-lg border border-border bg-surface px-3 text-sm text-text-primary placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand" />
+                  <label className="sr-only" htmlFor="grain-status-filter">Filter grains by status</label>
+                  <select id="grain-status-filter" value={grainStatusFilter} onChange={(event) => setGrainStatusFilter(event.target.value as typeof grainStatusFilter)} className="min-h-10 rounded-lg border border-border bg-surface px-3 text-sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                    <option value="all">All statuses</option>
+                    <option value="whole">Whole</option>
+                    <option value="broken">Broken</option>
+                    <option value="undetermined">Undetermined</option>
+                  </select>
+                </div>
               </div>
               <div role="region" aria-label="Grain population table" tabIndex={0} className="max-h-[310px] overflow-auto overscroll-contain rounded-xl border border-border">
                 <table className="w-full min-w-[700px] text-left text-xs">
@@ -298,11 +402,12 @@ export const App: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.objects.filter((object) => object.category === 'rice').map((grain) => {
+                    {visibleGrains.map((grain) => {
                       const selected = grain.id === selectedObjectId;
                       const ratio = grain.length_ratio;
+                      const selectGrain = () => setSelectedObjectId(grain.id);
                       return (
-                        <tr key={grain.id} onClick={() => setSelectedObjectId(grain.id)} className={`cursor-pointer border-t border-border transition hover:bg-brand-light/60 ${selected ? 'bg-brand-light/70' : 'bg-surface'}`}>
+                        <tr key={grain.id} tabIndex={0} aria-selected={selected} aria-label={`Select grain ${grain.id}, ${grain.whole_label ?? 'undetermined'}`} onClick={selectGrain} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectGrain(); } }} className={`cursor-pointer border-t border-border transition hover:bg-brand-light/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${selected ? 'bg-brand-light/70' : 'bg-surface'}`}>
                           <td className="px-3 py-2.5 font-semibold">{grain.id}</td>
                           <td className="px-3 py-2.5"><StatusBadge status={grain.whole_label ?? 'undetermined'} /></td>
                           <td className="px-3 py-2.5 font-medium">{formatMetric(grain.effective_length ?? grain.length ?? null)}</td>
@@ -312,7 +417,7 @@ export const App: React.FC = () => {
                         </tr>
                       );
                     })}
-                    {!result.rice_count && <tr><td colSpan={6} className="px-3 py-8 text-center text-text-muted">No rice grains detected.</td></tr>}
+                    {visibleGrains.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-text-muted">{result.rice_count ? 'No grains match these filters.' : 'No rice grains detected.'}</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -377,7 +482,8 @@ export const App: React.FC = () => {
                     <p className="mt-1 text-[10px] text-text-muted">Scroll over the image to zoom at the pointer. Turn Pan on to drag the image.</p>
                   </div>
                   <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
-                    <select value={selectedObjectId ?? ''} onChange={(event) => setSelectedObjectId(event.target.value || null)} className="col-span-2 min-w-0 w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-xs text-text-primary sm:col-span-1 sm:w-36">
+                    <label className="sr-only" htmlFor="object-select">Select a detected object</label>
+                    <select id="object-select" value={selectedObjectId ?? ''} onChange={(event) => setSelectedObjectId(event.target.value || null)} className="col-span-2 min-h-10 min-w-0 w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-xs text-text-primary sm:col-span-1 sm:w-36">
                       {result.objects.map((object) => <option key={object.id} value={object.id}>{object.category === 'rice' ? 'Grain' : 'Foreign'} {object.id}</option>)}
                     </select>
                     <ToggleButton active={showIds} onClick={() => setShowIds(!showIds)} icon={<Tags className="w-4 h-4" />} label={`IDs ${showIds ? 'ON' : 'OFF'}`} />
@@ -437,7 +543,7 @@ export const App: React.FC = () => {
                             <button
                               type="button"
                               aria-label={`Select ${object.category} ${object.id}`}
-                              onClick={(event) => event.preventDefault()}
+                              onClick={(event) => { event.preventDefault(); event.stopPropagation(); selectFromImage(object.id); }}
                               className="absolute border-2 bg-transparent"
                               style={{ left: `${(x / result.image_width) * 100}%`, top: `${(y / result.image_height) * 100}%`, width: `${(width / result.image_width) * 100}%`, height: `${(height / result.image_height) * 100}%`, borderColor: color, boxShadow: isSelected ? `0 0 0 2px white, 0 0 0 4px ${color}` : undefined }}
                             />
@@ -445,7 +551,7 @@ export const App: React.FC = () => {
                           {showIds && (
                             <button
                               type="button"
-                              onClick={(event) => event.preventDefault()}
+                              onClick={(event) => { event.preventDefault(); event.stopPropagation(); selectFromImage(object.id); }}
                               className="absolute -translate-x-1/2 -translate-y-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md ring-1 ring-white/80"
                               style={{ left: `${(centerX / result.image_width) * 100}%`, top: `${(centerY / result.image_height) * 100}%`, backgroundColor: color, zIndex: isSelected ? 20 : 10 }}
                             >
@@ -569,7 +675,7 @@ function InspectorStat({ label, value, mono = false }: { label: string; value: s
 
 function ToggleButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
-    <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${active ? 'border-brand bg-brand-light text-brand' : 'border-border bg-surface text-text-secondary'}`}>
+    <button type="button" onClick={onClick} aria-pressed={active} className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${active ? 'border-brand bg-brand-light text-brand' : 'border-border bg-surface text-text-secondary'}`}>
       {icon}<span>{label}</span>
     </button>
   );
@@ -584,7 +690,7 @@ function ObjectList({ title, objects, selectedId, onSelect }: { title: string; o
       {objects.length ? (
         <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
           {objects.map((object) => (
-            <button key={object.id} type="button" onClick={() => onSelect(object.id)} className="rounded-md border px-2 py-1 text-xs font-semibold" style={{ backgroundColor: object.id === selectedId ? objectColor(object) : `${objectColor(object)}18`, color: object.id === selectedId ? '#fff' : objectColor(object), borderColor: `${objectColor(object)}66` }}>
+            <button key={object.id} type="button" aria-pressed={object.id === selectedId} onClick={() => onSelect(object.id)} className="min-h-8 min-w-8 rounded-md border px-2 py-1 text-xs font-semibold" style={{ backgroundColor: object.id === selectedId ? objectColor(object) : `${objectColor(object)}18`, color: object.id === selectedId ? '#fff' : objectColor(object), borderColor: `${objectColor(object)}66` }}>
               {object.id}
             </button>
           ))}

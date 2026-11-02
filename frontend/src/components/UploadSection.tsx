@@ -15,12 +15,26 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
   const [cameraState, setCameraState] = useState<CameraState>('idle');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null);
-  const [cameraSupported, setCameraSupported] = useState<boolean>(true);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+
+  const setFilePreview = (file: File) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setPreviewUrl(url);
+  };
+
+  const clearFilePreview = () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
+  };
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -35,21 +49,33 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
   useEffect(() => {
     return () => {
       stopCamera();
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
 
   const handleFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    if (files.length > 1) {
+      setFileError('Choose one image per analysis.');
+      return;
+    }
     const file = files[0];
+    const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff', '.bmp'];
+    const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff', 'image/bmp'];
+    if (!supportedExtensions.includes(extension) && !supportedTypes.includes(file.type)) {
+      setFileError('Choose a JPEG, PNG, WebP, TIFF, or BMP image.');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setFileError('This image is larger than the 25 MB limit. Choose a smaller image.');
+      return;
+    }
+    setFileError(null);
     setSelectedFile(file);
-    setPreviewUrl(null);
+    setFilePreview(file);
     setCapturedPreviewUrl(null);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreviewUrl(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setCameraState('idle');
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -71,14 +97,14 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
 
   const startCamera = async () => {
     setCameraError(null);
+    setFileError(null);
     setCapturedPreviewUrl(null);
     setSelectedFile(null);
-    setPreviewUrl(null);
+    clearFilePreview();
     setCameraState('requesting');
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraSupported(false);
       setCameraState('error');
       setCameraError('Camera is not supported in this browser.');
       return;
@@ -139,7 +165,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
     stopCamera();
     setCapturedPreviewUrl(null);
     setSelectedFile(null);
-    setPreviewUrl(null);
+    clearFilePreview();
     setCameraState('idle');
     setCameraError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -170,6 +196,8 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
     setCapturedPreviewUrl(null);
     setCameraState('idle');
     setCameraError(null);
+    setFileError(null);
+    clearFilePreview();
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -185,8 +213,9 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
           Rice Grain Quality Analysis
         </h1>
         <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary sm:text-base">
-          Upload an image or take a photo to create a masked image and count rice grains and foreign matter.
+          Upload a sample photo to count grains and inspect the detected masks. For best results, use the green background, spread grains apart, and avoid harsh shadows.
         </p>
+        <p className="mt-3 text-xs text-text-muted">JPEG, PNG, WebP, TIFF, or BMP · Up to 25 MB</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -195,30 +224,35 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Upload Card */}
             <div
+              role="button"
+              tabIndex={0}
+              aria-label="Choose a rice sample image, or drop an image here"
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInputRef.current?.click(); } }}
               className={`relative border-2 border-dashed rounded-2xl p-5 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
                 dragActive
                   ? 'border-brand bg-brand-light'
                   : 'border-border bg-surface hover:border-border-dark hover:bg-surface-subtle'
-              }`}
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2`}
             >
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp,.tiff,.tif"
+                accept=".jpg,.jpeg,.png,.webp,.tiff,.tif,.bmp"
+                aria-label="Choose an image file"
                 className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
+                onChange={(e) => { handleFiles(e.target.files); e.currentTarget.value = ''; }}
               />
               <div className="w-14 h-14 rounded-2xl bg-brand-light border border-border flex items-center justify-center text-brand mx-auto mb-3">
                 <Upload className="w-7 h-7" />
               </div>
-              <div className="text-sm font-semibold text-text-primary">Upload Image</div>
+              <div className="text-sm font-semibold text-text-primary">Choose or drop an image</div>
               <p className="text-xs text-text-muted mt-1 max-w-[220px] mx-auto">
-                Choose a photo from your device
+                Select a photo from your device or drag it here
               </p>
             </div>
 
@@ -242,7 +276,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
 
         {/* Camera Error */}
         {cameraState === 'error' && cameraError && (
-          <div className="bg-error-bg border border-error/30 rounded-xl p-4 flex items-start gap-3">
+          <div role="alert" className="bg-error-bg border border-error/30 rounded-xl p-4 flex items-start gap-3">
             <CameraOff className="w-5 h-5 text-error shrink-0 mt-0.5" />
             <div className="flex-1">
               <span className="font-semibold text-error text-sm">Camera Unavailable</span>
@@ -251,12 +285,14 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
             <button
               type="button"
               onClick={() => { setCameraState('idle'); setCameraError(null); }}
-              className="text-xs text-error hover:text-text-primary underline"
+                className="min-h-10 px-2 text-xs text-error hover:text-text-primary underline"
             >
               Dismiss
             </button>
           </div>
         )}
+
+        {fileError && <div role="alert" className="rounded-xl border border-error/30 bg-error-bg px-4 py-3 text-sm text-error">{fileError}</div>}
 
         {/* Camera Preview */}
         {isCameraActive && (
@@ -333,19 +369,24 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
         {/* Upload Drop Zone & Preview (shown when file selected or preview exists) */}
         {!isCameraActive && cameraState !== 'captured' && (previewUrl || selectedFile) && (
           <div
-            className="relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200 border-border bg-surface hover:border-border-dark hover:bg-surface-subtle"
+            role="button"
+            tabIndex={0}
+            aria-label="Replace selected image"
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInputRef.current?.click(); } }}
+            className="relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200 border-border bg-surface hover:border-border-dark hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             onClick={() => fileInputRef.current?.click()}
           >
             <input
               ref={fileInputRef}
               type="file"
-              accept=".jpg,.jpeg,.png,.webp,.tiff,.tif"
+              accept=".jpg,.jpeg,.png,.webp,.tiff,.tif,.bmp"
+              aria-label="Choose a replacement image"
               className="hidden"
-              onChange={(e) => handleFiles(e.target.files)}
+              onChange={(e) => { handleFiles(e.target.files); e.currentTarget.value = ''; }}
             />
             <div className="flex flex-col items-center gap-4">
               <div className="relative group w-full max-w-sm rounded-xl overflow-hidden border border-border bg-surface-subtle">
-                <img src={previewUrl || ''} alt="Upload Preview" className="mx-auto max-h-72 max-w-full object-contain" />
+                <img src={previewUrl || ''} alt="Preview of the selected rice sample" onError={() => setFileError('This image could not be previewed. Choose a different image file.')} className="mx-auto max-h-72 max-w-full object-contain" />
                 <div className="absolute inset-0 bg-text-primary/0 group-hover:bg-text-primary/10 transition-opacity flex items-center justify-center">
                   <span className="text-xs text-text-primary bg-surface px-3 py-1.5 rounded-lg border border-border">
                     Click or drop to replace
@@ -365,7 +406,8 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
             <button
               type="button"
               onClick={resetAll}
-              className="px-5 py-2.5 rounded-xl font-semibold text-sm bg-surface hover:bg-surface-subtle text-text-secondary border border-border transition"
+              disabled={isLoading}
+              className="min-h-11 px-5 py-2.5 rounded-xl font-semibold text-sm bg-surface hover:bg-surface-subtle text-text-secondary border border-border transition disabled:opacity-50"
             >
               Clear
             </button>
@@ -373,7 +415,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
           <button
             type="submit"
             disabled={!selectedFile || isLoading}
-            className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
+            className={`min-h-11 w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
               !selectedFile || isLoading
                 ? 'bg-surface-subtle text-text-muted cursor-not-allowed border border-border'
                 : 'bg-brand hover:bg-brand-dark text-white shadow-sm'
