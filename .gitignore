@@ -40,12 +40,7 @@ frontend/coverage/
 backend/.env
 *.env
 
-# Generated rice-count method outputs (keep method code and READMEs)
-/rice_count_pipeline/methods/autolabel_proxy/results/
-/rice_count_pipeline/methods/area_count/results/
-/models/experiments/
-
-# Project workflow artifacts
+# Local datasets and generated artifacts, including historical archive data
 data/
 datasets/
 data/grain/
@@ -61,6 +56,7 @@ progress/
 uploads/
 tmp/
 *.tmp
+/other models and methods/data_and_runs/
 
 # Locally generated ML/runtime caches and reports
 *.cache

@@ -1,0 +1,14 @@
+{
+  "scope": "in-sample agreement against proxy masks on all 860 training photos",
+  "imgsz": 768,
+  "box_precision": 0.9698546432867181,
+  "box_recall": 0.9626329543793267,
+  "box_map50": 0.9834645412354959,
+  "box_map50_95": 0.7956471732646014,
+  "mask_precision": 0.9703739409103521,
+  "mask_recall": 0.9616130130319883,
+  "mask_map50": 0.9832085974009739,
+  "mask_map50_95": 0.6208245904785483,
+  "rice_mask_ap50": 0.9726710411925161,
+  "foreign_mask_ap50": 0.9937461536094316
+}

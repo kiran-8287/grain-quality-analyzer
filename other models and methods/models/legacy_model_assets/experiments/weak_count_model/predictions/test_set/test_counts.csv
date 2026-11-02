@@ -1,0 +1,21 @@
+file,true_whole,true_broken,true_rice_total,true_foreign,pred_rice,pred_foreign,pred_rice_pct,pred_foreign_pct,true_rice_pct,true_foreign_pct,rice_abs_error,foreign_abs_error,rice_match,foreign_match,both_match
+"115 whole, 15 broken , 15 stones(1).jpg",115,15,130,15,152,15,91.02,8.98,89.66,10.34,22,0,False,True,False
+"115 whole, 15 broken , 15 stones(2).jpg",115,15,130,15,154,15,91.12,8.88,89.66,10.34,24,0,False,True,False
+"115 whole, 15 broken , 15 stones(3).jpg",115,15,130,15,148,15,90.8,9.2,89.66,10.34,18,0,False,True,False
+"115 whole, 15 broken , 15 stones.jpg",115,15,130,15,149,15,90.85,9.15,89.66,10.34,19,0,False,True,False
+"135 whole , 15 broken , 15 stones(1).jpg",135,15,150,15,181,14,92.82,7.18,90.91,9.09,31,1,False,False,False
+"135 whole , 15 broken , 15 stones(2).jpg",135,15,150,15,181,14,92.82,7.18,90.91,9.09,31,1,False,False,False
+"135 whole , 15 broken , 15 stones(3).jpg",135,15,150,15,172,15,91.98,8.02,90.91,9.09,22,0,False,True,False
+"135 whole , 15 broken , 15 stones.jpg",135,15,150,15,166,15,91.71,8.29,90.91,9.09,16,0,False,True,False
+"185 whole, 15 broken, 10 stones(1).jpg",185,15,200,10,235,10,95.92,4.08,95.24,4.76,35,0,False,True,False
+"185 whole, 15 broken, 10 stones(2).jpg",185,15,200,10,238,10,95.97,4.03,95.24,4.76,38,0,False,True,False
+"185 whole, 15 broken, 10 stones(3).jpg",185,15,200,10,242,10,96.03,3.97,95.24,4.76,42,0,False,True,False
+"185 whole, 15 broken, 10 stones.jpg",185,15,200,10,248,11,95.75,4.25,95.24,4.76,48,1,False,False,False
+"185 whole, 15 broken, 20 stones(1).jpg",185,15,200,20,271,20,93.13,6.87,90.91,9.09,71,0,False,True,False
+"185 whole, 15 broken, 20 stones(2).jpg",185,15,200,20,250,20,92.59,7.41,90.91,9.09,50,0,False,True,False
+"185 whole, 15 broken, 20 stones(3).jpg",185,15,200,20,262,21,92.58,7.42,90.91,9.09,62,1,False,False,False
+"185 whole, 15 broken, 20 stones.jpg",185,15,200,20,250,20,92.59,7.41,90.91,9.09,50,0,False,True,False
+"235 whole, 15 broken , 20 stones(1).jpg",235,15,250,20,317,19,94.35,5.65,92.59,7.41,67,1,False,False,False
+"235 whole, 15 broken , 20 stones(2).jpg",235,15,250,20,298,19,94.01,5.99,92.59,7.41,48,1,False,False,False
+"235 whole, 15 broken , 20 stones(3).jpg",235,15,250,20,315,19,94.31,5.69,92.59,7.41,65,1,False,False,False
+"235 whole, 15 broken , 20 stones.jpg",235,15,250,20,289,19,93.83,6.17,92.59,7.41,39,1,False,False,False

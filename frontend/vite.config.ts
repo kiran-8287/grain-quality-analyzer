@@ -19,14 +19,6 @@ export default defineConfig(() => {
           target: devTarget,
           changeOrigin: true,
         },
-        '/standards': {
-          target: devTarget,
-          changeOrigin: true,
-        },
-        '/models': {
-          target: devTarget,
-          changeOrigin: true,
-        }
       }
     }
   };

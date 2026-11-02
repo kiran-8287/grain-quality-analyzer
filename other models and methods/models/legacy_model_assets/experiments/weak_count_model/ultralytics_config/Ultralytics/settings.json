@@ -1,0 +1,19 @@
+{
+  "settings_version": "0.0.8",
+  "datasets_dir": "A:\\grain\\data\\rice_count\\datasets",
+  "weights_dir": "A:\\grain\\models\\experiments\\weak_count_model",
+  "runs_dir": "A:\\grain\\models\\experiments\\weak_count_model\\runs",
+  "uuid": "f0027a0c2f735762e753a8b899d74ddc3c38953e962569fbb953a43470c78e0d",
+  "sync": true,
+  "api_key": "",
+  "openai_api_key": "",
+  "clearml": true,
+  "comet": true,
+  "dvc": true,
+  "mlflow": true,
+  "raytune": true,
+  "tensorboard": false,
+  "wandb": false,
+  "vscode_msg": true,
+  "openvino_msg": true
+}
