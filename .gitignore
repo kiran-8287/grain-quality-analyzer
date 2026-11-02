@@ -93,3 +93,7 @@ Thumbs.db
 kilo.json
 AGENTS.md
 currenttask.md
+
+# Agent handoff and historical work-log documents stay local, not in commits.
+/other models and methods/research/documentation/WORK_LOG.md
+/other models and methods/research/documentation/audits/AI_HANDOVER.md
