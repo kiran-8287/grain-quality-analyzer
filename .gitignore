@@ -42,6 +42,14 @@ backend/.env
 
 # Local datasets and generated artifacts, including historical archive data
 data/
+!data/
+data/*
+!data/rice_count/
+data/rice_count/*
+!data/rice_count/test/
+data/rice_count/test/*
+!data/rice_count/test/*.jpg
+!data/rice_count/test/README.md
 datasets/
 data/grain/
 raw_images/

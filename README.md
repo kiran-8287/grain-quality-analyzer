@@ -126,11 +126,11 @@ Application, Uvicorn, request, analysis, and lifecycle events are written to `GR
 The local image folders are:
 
 ```text
-data/rice_count/raw/   # 860 raw images
-data/rice_count/test/  # 20 test images
+data/rice_count/raw/   # 860 raw images; local and Git-ignored
+data/rice_count/test/  # 20 test images; versioned in this repository
 ```
 
-They are ignored by Git and are not required to run the application. Historical datasets and experiment outputs are preserved under `other models and methods/data_and_runs/`.
+The 20 test images are included in GitHub for reproducible local checks. Their filenames encode nominal whole, broken, and stone counts; these are reference compositions, not reviewed instance masks or independently verified ground truth. EXIF and comment metadata were removed without changing decoded pixels. The 860 raw images remain local and Git-ignored. Neither image set is required to run the application. Historical datasets and experiment outputs are preserved under `other models and methods/data_and_runs/`.
 
 ## Deployment
 
