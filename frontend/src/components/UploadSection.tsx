@@ -62,9 +62,10 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
     const file = files[0];
     const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff', '.bmp'];
     const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
-    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/tiff', 'image/bmp'];
-    if (!supportedExtensions.includes(extension) && !supportedTypes.includes(file.type)) {
-      setFileError('Choose a JPEG, PNG, WebP, TIFF, or BMP image.');
+    const mimeType = file.type.toLowerCase();
+    const supportedTypes = ['image/jpeg', 'image/jpg', 'image/pjpeg', 'image/png', 'image/webp', 'image/tiff', 'image/bmp'];
+    if (!supportedExtensions.includes(extension) && !supportedTypes.includes(mimeType)) {
+      setFileError('Choose a JPEG (.jpg or .jpeg), PNG, WebP, TIFF, or BMP image.');
       return;
     }
     if (file.size > 25 * 1024 * 1024) {
@@ -215,7 +216,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
         <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary sm:text-base">
           Upload a sample photo to count grains and inspect the detected masks. For best results, use the green background, spread grains apart, and avoid harsh shadows.
         </p>
-        <p className="mt-3 text-xs text-text-muted">JPEG, PNG, WebP, TIFF, or BMP · Up to 25 MB · 16 megapixels</p>
+        <p className="mt-3 text-xs text-text-muted">JPEG (.jpg or .jpeg), PNG, WebP, TIFF, or BMP · Up to 25 MB · 16 megapixels</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -242,7 +243,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".jpg,.jpeg,.png,.webp,.tiff,.tif,.bmp"
+                accept=".jpg,.jpeg,image/jpeg,image/jpg,image/pjpeg,.png,image/png,.webp,image/webp,.tiff,.tif,image/tiff,.bmp,image/bmp"
                 aria-label="Choose an image file"
                 className="hidden"
                 onChange={(e) => { handleFiles(e.target.files); e.currentTarget.value = ''; }}
@@ -379,7 +380,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
             <input
               ref={fileInputRef}
               type="file"
-              accept=".jpg,.jpeg,.png,.webp,.tiff,.tif,.bmp"
+              accept=".jpg,.jpeg,image/jpeg,image/jpg,image/pjpeg,.png,image/png,.webp,image/webp,.tiff,.tif,image/tiff,.bmp,image/bmp"
               aria-label="Choose a replacement image"
               className="hidden"
               onChange={(e) => { handleFiles(e.target.files); e.currentTarget.value = ''; }}

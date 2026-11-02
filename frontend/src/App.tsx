@@ -249,9 +249,7 @@ export const App: React.FC = () => {
         const details = errorData.detail || `Server error (${response.status})`;
         throw new Error(response.status === 413
           ? 'This image exceeds the upload size or pixel-dimension limit. Choose a smaller image and try again.'
-          : response.status === 415
-            ? 'This image format is not supported. Choose a JPEG, PNG, WebP, TIFF, or BMP image.'
-            : details);
+          : details);
       }
       const data = (await response.json()) as RiceAnalysisResult;
       setResult(data);

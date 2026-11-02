@@ -78,6 +78,7 @@ The static site is written to `frontend/dist/`.
 - Maximum decoded image dimensions: 16 megapixels total.
 - Minimum image side: 8 pixels.
 - Accepted formats: JPEG, PNG, WebP, TIFF, and BMP.
+- Some phone photos use the MPO multi-picture container but keep a `.jpg` extension. These are accepted as JPEGs; analysis uses the primary image decoded by OpenCV.
 - The backend processes one analysis at a time and allows two analyses to wait. Additional concurrent analysis requests receive HTTP `503` and can be retried.
 
 The backend checks image dimensions before decoding pixels. It handles EXIF orientation, grayscale, alpha, and 16-bit input (normalized to 8-bit for the active CV method). Analysis happens in memory; uploaded filenames and image contents are not written to the application log. Chunked request bodies may be temporarily spooled by the request middleware and the temporary spool is closed after the request.

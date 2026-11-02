@@ -24,6 +24,9 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_IMAGE_PIXELS = 16_000_000
 SUPPORTED_FORMATS = {
     "JPEG": "image/jpeg",
+    # Some phones store JPEG images as MPO (multi-picture) containers while
+    # keeping the .jpg extension. OpenCV decodes the primary JPEG image.
+    "MPO": "image/jpeg",
     "PNG": "image/png",
     "WEBP": "image/webp",
     "TIFF": "image/tiff",
@@ -47,7 +50,7 @@ def _decode_upload(contents: bytes) -> tuple[np.ndarray, str]:
                     detail=f"Image dimensions exceed the {MAX_IMAGE_PIXELS // 1_000_000} megapixel processing limit.",
                 )
             if image_format not in SUPPORTED_FORMATS:
-                raise HTTPException(status_code=415, detail="Upload a JPEG, PNG, WebP, TIFF, or BMP image.")
+                raise HTTPException(status_code=415, detail="Upload a JPEG (.jpg or .jpeg), PNG, WebP, TIFF, or BMP image.")
             image_header.verify()
         with Image.open(io.BytesIO(contents)) as image_metadata:
             try:
