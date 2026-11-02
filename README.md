@@ -1,32 +1,41 @@
 # Grain Quality Analyzer
 
-Grain Quality Analyzer is a browser-based tool for analyzing rice sample photos on a green background. Upload a photo or capture one with a camera; the application segments rice grains and foreign matter, displays a color-masked result, and reports image-based counts and measurements.
+Grain Quality Analyzer is a browser application for inspecting rice sample images. Upload a photo or capture one with a camera to see detected rice grains, foreign objects, masks, counts, and per-grain measurements.
 
-The live application uses a **classical computer-vision method**, not a trained neural-network model. Its implementation is in [`rice_analysis_method/rice_analysis.py`](rice_analysis_method/rice_analysis.py). Retired models, pipelines, evaluations, and previous application code are preserved under [`other models and methods/`](other%20models%20and%20methods/README.md) and are not imported by the current app.
+## Current application
 
-## What the application shows
+- **Frontend:** React, TypeScript, Vite, and Tailwind in `frontend/`.
+- **Backend:** FastAPI in `backend/app/`.
+- **Active image method:** classical computer vision in `rice_analysis_method/rice_analysis.py`.
+- **Optional operations dashboard:** Streamlit in `monitoring_dashboard/`.
 
-- Total detected rice grains and foreign objects.
-- Whole and broken grain counts, plus the whole-grain percentage.
-- An annotated image with separate masks for whole rice, broken rice, and foreign matter.
-- Per-grain measurements, object IDs, a grain inspector, and downloadable masked-image and CSV outputs.
-- Image controls for selecting objects, showing or hiding masks and boxes, zooming, and optional panning.
+The active application does not load trained model weights. The backend calls the active method's `label_image` function to find rice and foreign matter and to split touching grains. Retired models, experiments, and the previous application are kept in [`other models and methods/`](other%20models%20and%20methods/README.md) and are not part of the live analysis path.
 
-Mask colors are blue for whole grains, yellow for broken grains, red for foreign matter, and gray when a grain's whole/broken status cannot be determined.
+## Image analysis and results
 
-The segmentation method analyzes images at 40% of their original width and height to preserve its current working behavior. The resulting masks are mapped back to the source image dimensions for display; fine details below the working resolution can still affect detection. The original upload is returned unchanged for browser-supported formats; TIFF is converted to PNG for browser display. Annotated images and object masks are encoded as lossless PNG. Camera captures are JPEG encoded at quality 98. The CV method uses 8-bit color, so 16-bit inputs are normalized to 8-bit for analysis. Images above 16 megapixels or with a side smaller than 8 pixels are rejected before pixel decoding; the local raw/test sets fit within these limits.
+The upload page accepts JPEG, PNG, WebP, TIFF, and BMP images. It presents the input image, then reports:
 
-Whole/broken status is an image-based estimate: the method estimates a reference length from the uploaded photo and marks rice objects at least 75% of that length as whole. Lengths are in pixels and depend on image scale. This count-based estimate is not a laboratory measurement or a certified weight-based grade.
+- Total rice grain and foreign-object counts.
+- Whole and broken grain counts and the whole-grain percentage.
+- An annotated image with masks for whole grains, broken grains, and foreign matter.
+- IDs and measurements for each detected object, plus an isolated mask preview when an object is selected.
+- Downloadable annotated image and grain-data CSV.
+
+Mask colors are blue for whole grains, yellow for broken grains, red for foreign matter, and gray for rice when whole/broken status cannot be determined. The image viewer supports selection, optional IDs and boxes, mask visibility, pointer-centered zoom, and optional pan mode. IDs and boxes start hidden; masks start visible and pan starts off.
+
+The current CV method analyzes at 40% of the source image's width and height, then maps detected masks to source-image coordinates for display. Very fine details can be lost at the working resolution. The original upload is returned unchanged for formats the browser can display; TIFF is converted for browser display. Masks and annotated output are encoded as lossless PNG. Camera captures are JPEG encoded at quality 98.
+
+Whole/broken status is an image-based estimate. The method estimates a whole-grain reference length from the uploaded sample image and labels a rice object whole when its measured length is at least 75% of that reference. Measurements are in pixels and depend on image scale. This does not replace a laboratory or weight-based regulatory grade.
 
 ## Requirements
 
 - Python 3.10 or newer.
 - Node.js 18 or newer and npm.
-- Windows PowerShell commands are shown below; the Python and npm commands also work in other shells with equivalent virtual-environment activation.
+- Windows PowerShell commands are shown below. Use the equivalent virtual-environment commands for other shells.
 
 ## Run locally
 
-From the repository root, create and activate a virtual environment if needed, then install the backend and frontend dependencies:
+From the repository root, install the backend and frontend dependencies:
 
 ```powershell
 py -m venv .venv
@@ -37,7 +46,7 @@ npm install
 npm --prefix frontend install
 ```
 
-If PowerShell blocks virtual-environment activation, run the Python commands using `.venv\Scripts\python.exe` directly.
+If PowerShell blocks environment activation, call `.venv\Scripts\python.exe` directly for Python commands.
 
 Start both development servers:
 
@@ -45,24 +54,33 @@ Start both development servers:
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). The frontend runs on port `5173`; the backend runs on port `10000`. Vite forwards `/api` and `/health` requests to the backend. To run only one server, use `npm run dev:frontend` or `npm run dev:backend`.
+Open [http://localhost:5173](http://localhost:5173). Vite serves the frontend and forwards `/api` and `/health` requests to the backend on port `10000`. Backend application and Uvicorn logs are written to `logs/app.log`; frontend Vite/npm messages remain in the terminal.
 
-Create a production frontend build with:
+The servers can also be started separately:
+
+```powershell
+npm run dev:backend
+npm run dev:frontend
+```
+
+Create a production frontend bundle with:
 
 ```powershell
 npm run build
 ```
 
-The generated static site is in `frontend/dist/`.
+The static site is written to `frontend/dist/`.
 
-## Analyze an image
+## Image and processing limits
 
-1. Open the site and choose an image, drag and drop it, or use the camera option.
-2. Submit the photo for analysis. Supported formats are JPEG, PNG, WebP, TIFF, and BMP; the upload limit is 25 MB.
-3. Review the count cards and annotated result. Select a detected object to inspect its ID and individual mask; use the image controls to adjust the view.
-4. Download the masked image or grain data CSV from the results page.
+- Maximum uploaded image file: 25 MiB.
+- Maximum multipart request body: 26 MiB, including multipart overhead.
+- Maximum decoded image dimensions: 16 megapixels total.
+- Minimum image side: 8 pixels.
+- Accepted formats: JPEG, PNG, WebP, TIFF, and BMP.
+- The backend processes one analysis at a time and allows two analyses to wait. Additional concurrent analysis requests receive HTTP `503` and can be retried.
 
-For best results, photograph grains on a green background, spread them apart when possible, and avoid harsh shadows. Touching or overlapping objects may be separated by the image-processing method, so review the resulting masks for difficult samples.
+The backend checks image dimensions before decoding pixels. It handles EXIF orientation, grayscale, alpha, and 16-bit input (normalized to 8-bit for the active CV method). Analysis happens in memory; uploaded filenames and image contents are not written to the application log. Chunked request bodies may be temporarily spooled by the request middleware and the temporary spool is closed after the request.
 
 ## API
 
@@ -70,82 +88,88 @@ The FastAPI service provides:
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/health` | Service health status. |
-| `POST` | `/api/rice-quality/analyze` | Analyze an uploaded image. Send it as multipart form data in a field named `file`. |
+| `GET` | `/health` | Health status and service name. |
+| `POST` | `/api/rice-quality/analyze` | Analyze one multipart image in the `file` field. |
 
-The analysis response includes `original_image`, `masked_image`, image dimensions, `rice_count`, `foreign_matter_count`, per-object IDs and measurements, and summary statistics. The server also exposes the same router without the `/api` prefix for compatibility (`/rice-quality/analyze` and `/api/health`). Interactive API documentation is available at `/docs` while the backend is running.
+For compatibility, the analysis route and health route are also available without the `/api` prefix at `/rice-quality/analyze` and `/health`. OpenAPI documentation is available at `/docs` while the backend is running.
 
-To keep memory bounded on small hosts, the backend processes one image at a time and allows up to two requests to wait. Additional concurrent analysis requests receive HTTP `503` and can be retried.
-
-## Data folders
-
-The local image sets are available at:
-
-```text
-data/rice_count/raw/   # 860 raw images
-data/rice_count/test/  # 20 test images
-```
-
-These folders are ignored by Git because they contain local data. They are useful for local evaluation and are not required to start the web application. Other historical data and experiment outputs remain in `other models and methods/data_and_runs/`.
-
-## Configuration
-
-Backend settings are read from environment variables:
-
-| Variable | Purpose | Local default |
-| --- | --- | --- |
-| `PORT` | Backend listening port. | `10000` |
-| `FRONTEND_ORIGIN` | Comma-separated allowed browser origins for CORS. | `http://localhost:5173,http://localhost:3000` |
-| `LOG_LEVEL` | Backend log level. | `INFO` |
-| `GRAIN_LOG_DIR` | Directory for the rotating JSON Lines application log. | `logs/` |
-
-Each HTTP request writes start and finish events with a request ID, status, elapsed time, in-flight count, and process RSS. Analysis requests also log processing time, source dimensions, and result counts; file contents and original filenames are not logged. Server startup and shutdown are logged. Backend application and Uvicorn server logs are written only to the rotating `logs/app.log`; they are not echoed to the terminal. Duplicate Uvicorn access lines are disabled because the request middleware records each request. Uploads are not saved as application artifacts; the server may temporarily spool large request/multipart bodies in the OS temp directory and closes those temporary files when processing ends. The local log rotates at 10 MB and retains up to five backups. If logs from the previous non-JSON format exist at startup, they are preserved as `logs/app.legacy.<timestamp>.log`; new events are written as one JSON object per line to `logs/app.log`. Set `GRAIN_LOG_DIR` to persistent storage if logs must survive a host restart or redeploy.
+The analysis response includes `original_image`, `masked_image`, `image_width`, `image_height`, `rice_count`, `foreign_matter_count`, an `objects` list with IDs/categories/masks/measurements, and a `summary` object with grain counts and aggregate measurements. Images are returned as data URLs.
 
 ## Operations dashboard
 
-An optional Streamlit dashboard reads the local and rotated logs, or exported logs uploaded in the dashboard. Install its separate dependencies and run it from the project root:
+The optional Streamlit dashboard reads local and rotated backend logs or exported log files. Install its dependencies separately from the backend and start it from the repository root:
 
 ```powershell
 python -m pip install -r monitoring_dashboard/requirements.txt
 python -m streamlit run monitoring_dashboard/app.py
 ```
 
-The dashboard opens in a browser and can refresh logs every 15 seconds. It reports request/analysis latency percentiles, request and error rates, health-check success, throughput, CPU/RSS samples, concurrency, upload sizes, and detected-count trends. It marks precision/recall/IoU/count accuracy as unavailable until reviewed ground-truth labels are supplied. See [the dashboard guide](monitoring_dashboard/README.md) for details.
+It opens at [http://localhost:8501](http://localhost:8501). The dashboard includes request/analysis latency, HTTP outcomes, endpoint activity, runtime samples, upload and queue distributions, image-count trends, and log-integrity views. It can refresh every 15 seconds. It reports model-quality measures such as precision, recall, mask IoU, and count error as unavailable because logs do not include reviewed ground truth. See the [full dashboard guide](monitoring_dashboard/README.md) for every metric, graph, source option, and interpretation note.
 
-For a separately hosted frontend, set `VITE_API_BASE_URL` in the frontend build environment to the backend origin, for example `https://your-api.example.com`. The frontend template is [`frontend/.env.example`](frontend/.env.example). For local development it can remain blank because Vite uses its development proxy.
+## Logs, privacy, and configuration
+
+Backend settings are read from environment variables:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PORT` | Backend listening port. | `10000` |
+| `FRONTEND_ORIGIN` | Comma-separated browser origins allowed by CORS. | `http://localhost:5173,http://localhost:3000` |
+| `LOG_LEVEL` | Minimum level for regular backend/Uvicorn logs. Request/lifecycle events remain enabled. | `INFO` |
+| `GRAIN_LOG_DIR` | Directory for rotating JSON Lines application logs. | `logs/` |
+
+Every HTTP request writes start and finish events with a request ID, method, path, status, duration, in-flight count, process RSS, and CPU sample. Image analyses also log queue wait, processing time, dimensions, result counts, and upload size. File contents and original filenames are not logged. Uvicorn access lines are disabled because the middleware records request activity without client IP addresses.
+
+Application, Uvicorn, request, analysis, and lifecycle events are written to `GRAIN_LOG_DIR/app.log` and are not echoed to the terminal. The file rotates at 10 MiB and keeps up to five backups. Existing non-JSON `app.log` files are preserved as `app.legacy.<timestamp>.log` at startup; new events are JSON Lines. Local and hosted filesystems may be ephemeral, so configure `GRAIN_LOG_DIR` to persistent storage if logs must survive service replacement. Uvicorn/platform stdout logs are not a substitute for a persistent log directory.
+
+## Local image sets
+
+The local image folders are:
+
+```text
+data/rice_count/raw/   # 860 raw images
+data/rice_count/test/  # 20 test images
+```
+
+They are ignored by Git and are not required to run the application. Historical datasets and experiment outputs are preserved under `other models and methods/data_and_runs/`.
 
 ## Deployment
 
-[`render.yaml`](render.yaml) defines the Python backend web service. It installs `backend/requirements.txt` and starts Uvicorn on the platform-provided port. Set `FRONTEND_ORIGIN` to the deployed frontend's exact origin (scheme and hostname) so browser requests pass CORS checks. Deploy the Vite frontend separately as a static site using `npm run build` with `frontend/dist/` as the publish directory, and set its `VITE_API_BASE_URL` to the backend origin before building.
+[`render.yaml`](render.yaml) defines the Python backend service with the Render slug `grain-quality-analyzer`. The current blueprint deploys the backend only. Deploy the Vite frontend separately as a static site:
 
-The backend can serve the built frontend from `frontend/dist/` when that directory is present in the deployed backend bundle. The current Render blueprint configures only the backend service, so a separately hosted frontend is the documented deployment setup.
+1. Set the backend's `FRONTEND_ORIGIN` to the deployed frontend's exact HTTPS origin.
+2. Set `VITE_API_BASE_URL` in the frontend build environment to the backend origin. The local template is [`frontend/.env.example`](frontend/.env.example).
+3. Build with `npm run build` and publish `frontend/dist/`.
+4. If log retention is needed, configure persistent storage and point `GRAIN_LOG_DIR` to it. Hosted instance files may otherwise disappear on restart or replacement.
 
-## Project structure
+The backend can serve `frontend/dist/` when the bundle is present in its deployment. The Render blueprint does not currently build or publish the frontend as part of the backend service.
+
+## Project layout
 
 ```text
-backend/                    FastAPI routes, app setup, and backend dependencies
+backend/                    FastAPI app, routes, logging, and backend dependencies
 frontend/                   React, TypeScript, and Vite website
-rice_analysis_method/       Active rice segmentation and counting implementation
-monitoring_dashboard/       Optional Streamlit log/performance dashboard
+rice_analysis_method/       Active classical image-analysis implementation
+monitoring_dashboard/       Optional Streamlit log and performance dashboard
+.streamlit/config.toml      Dashboard theme
 data/rice_count/raw/         Local raw image set (860 images)
 data/rice_count/test/        Local test image set (20 images)
-docs/                       Current project context and documentation
-progress/                   Project work log
-other models and methods/   Archived methods, models, data, and prior app code
+docs/                       Current developer-facing project context
+other models and methods/   Archived methods, models, datasets, and previous app
 ```
-
-The analysis route imports `label_image` from `rice_analysis_method`; it does not load model weights. The archive is kept for reference and is outside the active application path.
 
 ## Troubleshooting
 
-- **Backend fails to start:** Confirm the active virtual environment is selected and install `backend/requirements.txt`.
-- **Frontend cannot reach the API:** Check that the backend is running on port `10000`; for separate hosting, verify `VITE_API_BASE_URL` and the backend's `FRONTEND_ORIGIN`.
-- **Upload rejected:** Use a supported image format and keep the file at or below 25 MB.
-- **No masks or poor separation:** Use a well-lit photo with a green background and reduce grain overlap. The estimates depend on image conditions and should be reviewed visually.
+- **Backend fails to start:** Activate the intended Python environment and install `backend/requirements.txt`.
+- **Frontend cannot reach the API:** Confirm the backend is running; for separate hosting, check `VITE_API_BASE_URL` and `FRONTEND_ORIGIN`.
+- **Image is rejected:** Confirm its format, file size (at most 25 MiB), pixel count (at most 16 megapixels), and minimum side length (8 pixels).
+- **Analysis is busy:** One analysis is active and up to two wait; retry after a `503` response.
+- **Dashboard shows no logs:** Confirm `GRAIN_LOG_DIR` or the sidebar folder contains `app.log*`, or upload exported `.log`, `.txt`, or `.jsonl` files.
+- **Dashboard values show `N/A`:** Older log formats may not contain CPU, upload, queue, or grain-count fields. Newer backend events populate those values.
+- **Masks are incomplete or objects touch:** Use a well-lit image with grains spread apart on a green background. Review the masks because touching objects and details smaller than the working resolution can affect results.
 
-## Further documentation
+## Further reading
 
-- [Active analysis method](rice_analysis_method/README.md)
 - [Backend API notes](backend/README.md)
+- [Active analysis method](rice_analysis_method/README.md)
 - [Current project context](docs/PROJECT_CONTEXT.md)
-- [Archived project material](other%20models%20and%20methods/README.md)
+- [Archived methods and application](other%20models%20and%20methods/README.md)

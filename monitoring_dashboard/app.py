@@ -146,7 +146,16 @@ def _read_sources() -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[st
         log_dir = Path(log_dir_value).expanduser()
         if not log_dir.is_absolute():
             log_dir = (PROJECT_ROOT / log_dir).resolve()
-        files = sorted(path for path in log_dir.glob("app.log*") if path.is_file()) if log_dir.exists() else []
+        files = (
+            sorted({
+                path
+                for pattern in ("app.log*", "app.legacy.*.log")
+                for path in log_dir.glob(pattern)
+                if path.is_file()
+            })
+            if log_dir.exists()
+            else []
+        )
         for path in files:
             try:
                 with path.open("r", encoding="utf-8", errors="replace") as stream:
@@ -276,6 +285,8 @@ def render_dashboard() -> None:
         if field not in analysis_frame:
             analysis_frame[field] = pd.NA
         analysis_frame[field] = pd.to_numeric(analysis_frame[field], errors="coerce")
+    no_reference = analysis_frame["reference_length"].isna() | (analysis_frame["reference_length"] <= 0)
+    analysis_frame.loc[no_reference, ["whole_grain_count", "broken_grain_count"]] = pd.NA
 
     if "status" not in filtered:
         filtered["status"] = pd.NA
@@ -641,7 +652,7 @@ def render_dashboard() -> None:
             _show_chart(
                 grain_count_fig,
                 "grain-counts-per-analysis",
-                "Each point is one completed analysis. Total, whole, and broken rice counts are shown on the same grain-count scale; whole plus broken may differ from total when some labels are undetermined.",
+                "Each point is one completed analysis. Total, whole, and broken rice counts use the same scale. Whole/broken values are omitted when the logged reference length is missing or non-positive; undetermined grains can make whole plus broken differ from total.",
             )
 
         foreign_analyses = dated_analyses.dropna(subset=["foreign_matter_count"])
