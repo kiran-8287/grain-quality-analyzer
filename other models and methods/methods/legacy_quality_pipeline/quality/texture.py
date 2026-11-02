@@ -1,5 +1,5 @@
 """
-Texture feature extraction for rice grain quality analysis.
+Texture feature extraction for the legacy Grain Quality Analyzer analysis pipeline.
 
 Implements GLCM (Gray-Level Co-occurrence Matrix) features for chalkiness detection
 and general texture analysis.

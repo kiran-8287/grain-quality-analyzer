@@ -1,4 +1,4 @@
-# Rice analysis method
+# Grain Quality Analyzer - Active Rice Analysis Method
 
 This package is the single active analysis method used by the website. The implementation in `rice_analysis.py` uses classical computer vision and shape-aware watershed splitting to produce rice and foreign-matter masks and count estimates. It is not a trained model.
 

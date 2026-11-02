@@ -1,6 +1,6 @@
-# Rice Grain Quality Analysis
+# Grain Quality Analyzer
 
-A browser-based tool for analyzing a photo of rice on a green background. Upload a photo or capture one with a camera; the application segments rice grains and foreign matter, displays a color-masked result, and reports image-based counts and measurements.
+Grain Quality Analyzer is a browser-based tool for analyzing rice sample photos on a green background. Upload a photo or capture one with a camera; the application segments rice grains and foreign matter, displays a color-masked result, and reports image-based counts and measurements.
 
 The live application uses a **classical computer-vision method**, not a trained neural-network model. Its implementation is in [`rice_analysis_method/rice_analysis.py`](rice_analysis_method/rice_analysis.py). Retired models, pipelines, evaluations, and previous application code are preserved under [`other models and methods/`](other%20models%20and%20methods/README.md) and are not imported by the current app.
 
@@ -13,6 +13,8 @@ The live application uses a **classical computer-vision method**, not a trained 
 - Image controls for selecting objects, showing or hiding masks and boxes, zooming, and optional panning.
 
 Mask colors are blue for whole grains, yellow for broken grains, red for foreign matter, and gray when a grain's whole/broken status cannot be determined.
+
+The segmentation method analyzes images at 40% of their original width and height to preserve its current working behavior. The resulting masks are mapped back to the source image dimensions for display; fine details below the working resolution can still affect detection. The original upload is returned unchanged for browser-supported formats; TIFF is converted to PNG for browser display. Annotated images and object masks are encoded as lossless PNG. Camera captures are JPEG encoded at quality 98. The CV method uses 8-bit color, so 16-bit inputs are normalized to 8-bit for analysis. Images above 16 megapixels or with a side smaller than 8 pixels are rejected before pixel decoding; the local raw/test sets fit within these limits.
 
 Whole/broken status is an image-based estimate: the method estimates a reference length from the uploaded photo and marks rice objects at least 75% of that length as whole. Lengths are in pixels and depend on image scale. This count-based estimate is not a laboratory measurement or a certified weight-based grade.
 
@@ -73,6 +75,8 @@ The FastAPI service provides:
 
 The analysis response includes `original_image`, `masked_image`, image dimensions, `rice_count`, `foreign_matter_count`, per-object IDs and measurements, and summary statistics. The server also exposes the same router without the `/api` prefix for compatibility (`/rice-quality/analyze` and `/api/health`). Interactive API documentation is available at `/docs` while the backend is running.
 
+To keep memory bounded on small hosts, the backend processes one image at a time and allows up to two requests to wait. Additional concurrent analysis requests receive HTTP `503` and can be retried.
+
 ## Data folders
 
 The local image sets are available at:
@@ -93,7 +97,20 @@ Backend settings are read from environment variables:
 | `PORT` | Backend listening port. | `10000` |
 | `FRONTEND_ORIGIN` | Comma-separated allowed browser origins for CORS. | `http://localhost:5173,http://localhost:3000` |
 | `LOG_LEVEL` | Backend log level. | `INFO` |
-| `GRAIN_LOG_DIR` | Directory for the rotating application log. | `logs/` |
+| `GRAIN_LOG_DIR` | Directory for the rotating JSON Lines application log. | `logs/` |
+
+Each HTTP request writes start and finish events with a request ID, status, elapsed time, in-flight count, and process RSS. Analysis requests also log processing time, source dimensions, and result counts; file contents and original filenames are not logged. Server startup and shutdown are logged. Backend application and Uvicorn server logs are written only to the rotating `logs/app.log`; they are not echoed to the terminal. Duplicate Uvicorn access lines are disabled because the request middleware records each request. Uploads are not saved as application artifacts; the server may temporarily spool large request/multipart bodies in the OS temp directory and closes those temporary files when processing ends. The local log rotates at 10 MB and retains up to five backups. If logs from the previous non-JSON format exist at startup, they are preserved as `logs/app.legacy.<timestamp>.log`; new events are written as one JSON object per line to `logs/app.log`. Set `GRAIN_LOG_DIR` to persistent storage if logs must survive a host restart or redeploy.
+
+## Operations dashboard
+
+An optional Streamlit dashboard reads the local and rotated logs, or exported logs uploaded in the dashboard. Install its separate dependencies and run it from the project root:
+
+```powershell
+python -m pip install -r monitoring_dashboard/requirements.txt
+python -m streamlit run monitoring_dashboard/app.py
+```
+
+The dashboard opens in a browser and can refresh logs every 15 seconds. It reports request/analysis latency percentiles, request and error rates, health-check success, throughput, CPU/RSS samples, concurrency, upload sizes, and detected-count trends. It marks precision/recall/IoU/count accuracy as unavailable until reviewed ground-truth labels are supplied. See [the dashboard guide](monitoring_dashboard/README.md) for details.
 
 For a separately hosted frontend, set `VITE_API_BASE_URL` in the frontend build environment to the backend origin, for example `https://your-api.example.com`. The frontend template is [`frontend/.env.example`](frontend/.env.example). For local development it can remain blank because Vite uses its development proxy.
 
@@ -109,6 +126,7 @@ The backend can serve the built frontend from `frontend/dist/` when that directo
 backend/                    FastAPI routes, app setup, and backend dependencies
 frontend/                   React, TypeScript, and Vite website
 rice_analysis_method/       Active rice segmentation and counting implementation
+monitoring_dashboard/       Optional Streamlit log/performance dashboard
 data/rice_count/raw/         Local raw image set (860 images)
 data/rice_count/test/        Local test image set (20 images)
 docs/                       Current project context and documentation

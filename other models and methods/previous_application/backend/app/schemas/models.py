@@ -1,5 +1,5 @@
 """
-Pydantic Schemas for Rice Quality Analysis API.
+Pydantic schemas for the legacy Grain Quality Analyzer API.
 """
 
 from typing import Any, Dict, List, Literal, Optional
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class HealthResponse(BaseModel):
     status: str = "healthy"
     version: str = "1.0.0"
-    service: str = "GRAIN QUALITY ANALYZER Backend"
+    service: str = "Grain Quality Analyzer"
     gpu_available: bool = False
     device: str = "cpu"
 

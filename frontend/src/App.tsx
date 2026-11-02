@@ -248,7 +248,7 @@ export const App: React.FC = () => {
         const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
         const details = errorData.detail || `Server error (${response.status})`;
         throw new Error(response.status === 413
-          ? 'This image is larger than the 25 MB upload limit. Choose a smaller image and try again.'
+          ? 'This image exceeds the upload size or pixel-dimension limit. Choose a smaller image and try again.'
           : response.status === 415
             ? 'This image format is not supported. Choose a JPEG, PNG, WebP, TIFF, or BMP image.'
             : details);

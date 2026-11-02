@@ -148,7 +148,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
     setCapturedPreviewUrl(dataUrl);
     setCameraState('captured');
     stopCamera();
@@ -180,7 +180,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
       const file = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
       setSelectedFile(file);
       onAnalyze(file);
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', 0.98);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -210,12 +210,12 @@ export const UploadSection: React.FC<UploadSectionProps> = ({ onAnalyze, isLoadi
       {/* Intro Header */}
       <div className="text-center mb-8">
         <h1 className="text-2xl font-extrabold text-text-primary tracking-tight sm:text-3xl lg:text-4xl">
-          Rice Grain Quality Analysis
+          Grain Quality Analyzer
         </h1>
         <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary sm:text-base">
           Upload a sample photo to count grains and inspect the detected masks. For best results, use the green background, spread grains apart, and avoid harsh shadows.
         </p>
-        <p className="mt-3 text-xs text-text-muted">JPEG, PNG, WebP, TIFF, or BMP · Up to 25 MB</p>
+        <p className="mt-3 text-xs text-text-muted">JPEG, PNG, WebP, TIFF, or BMP · Up to 25 MB · 16 megapixels</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">

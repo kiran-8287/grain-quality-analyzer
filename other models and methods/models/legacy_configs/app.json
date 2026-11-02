@@ -1,8 +1,8 @@
 {
   "app": {
-    "name": "Rice Grain Quality Analyzer",
+    "name": "Grain Quality Analyzer",
     "version": "1.0.0",
-    "description": "Image-based raw milled rice grain quality analysis system"
+    "description": "Grain Quality Analyzer for image-based rice sample quality assessment"
   },
   "server": {
     "host": "0.0.0.0",

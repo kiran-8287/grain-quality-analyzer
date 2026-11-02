@@ -1,1 +1,1 @@
-# ML package for rice grain quality analysis
+# Legacy ML package for Grain Quality Analyzer rice-grain analysis.

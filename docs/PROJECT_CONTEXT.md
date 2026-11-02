@@ -1,4 +1,4 @@
-# Rice Quality Analysis — Current Project Context
+# Grain Quality Analyzer - Current Project Context
 
 ## Active application
 

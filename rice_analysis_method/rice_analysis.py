@@ -114,6 +114,10 @@ def learn_grain_model(comps, min_area):
         return GrainModel(*med)
     # fallback: no isolated grains found -> use smaller components
     areas = np.array(sorted(float(m.sum()) for m in comps if m.sum() >= min_area))
+    if not len(areas):
+        # A foreign-only or empty image has no usable rice reference. Keep the
+        # result finite so it is reported as undetermined instead of NaN.
+        return GrainModel(float(min_area), 0.0, 0.0, 0.0, 0.0)
     a = float(np.median(areas[:max(1, int(len(areas) * 0.6))]))
     W = np.sqrt(a / (3.6 * 0.785))
     L = 3.6 * W
@@ -345,11 +349,16 @@ def merge_pieces(L, g, ok=SINGLE_OK, crumb=0.30):
 
 def label_image(path, min_area=400, instance_callback=None, max_split_clusters=None,
                 seed=0, use_seams=True, merge=True, return_details=False):
-    im = cv2.imread(str(path))
+    # The web service decodes and validates uploads before calling this method.
+    # Accepting an array avoids writing user images to a temporary file. Keep
+    # path input for the standalone labeler and historical evaluation tools.
+    im = path.copy() if isinstance(path, np.ndarray) else cv2.imread(str(path))
     if im is None:
         raise ValueError(f'Could not read image: {path}')
+    original_height, original_width = im.shape[:2]
     processing_scale = 0.4
     im = cv2.resize(im, None, fx=processing_scale, fy=processing_scale, interpolation=cv2.INTER_AREA)
+    processing_height, processing_width = im.shape[:2]
     min_area = max(1, int(round(min_area * processing_scale * processing_scale)))
     stone, rice = segment_colour(im)
     rng = np.random.default_rng(seed)
@@ -425,6 +434,10 @@ def label_image(path, min_area=400, instance_callback=None, max_split_clusters=N
             'reference_length': float(g.length),
             'reference_width': float(g.width),
             'split_cluster_count': split_cluster_count,
+            'processing_width': int(processing_width),
+            'processing_height': int(processing_height),
+            'source_width': int(original_width),
+            'source_height': int(original_height),
         }
     return im, inst, g.area
 

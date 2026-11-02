@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: grain-quality-backend
+    name: grain-quality-analyzer
     runtime: python
     plan: free
     buildCommand: pip install -r backend/requirements.txt
